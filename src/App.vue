@@ -199,6 +199,7 @@ function onCustomMountOptionChange(remoteName) {
 }
 
 const loadingRemotes = reactive(new Set());
+const refreshingCacheRemotes = reactive(new Set());
 const autoMountList = ref(JSON.parse(localStorage.getItem("rclone_auto_mount_list") || "[]"));
 
 // Supported Providers & S3 Settings
@@ -438,7 +439,7 @@ const editTaskForm = reactive({
 let schedulerTimer = null;
 
 // GitHub Auto-Update State & Settings
-const CURRENT_VERSION = "1.6.2";
+const CURRENT_VERSION = "1.6.3";
 const GITHUB_REPO = "alan0830/rclone-drive";
 
 const savedUpdateSettings = JSON.parse(localStorage.getItem("rclone_update_settings") || "{}");
@@ -906,6 +907,23 @@ async function openExplorer(driveLetter) {
     await invoke("open_in_explorer", { driveLetter });
   } catch (err) {
     showToast(`無法開啟檔案總管: ${err}`, "error");
+  }
+}
+
+// 強制刷新 VFS 目錄快取（解決新資料不更新問題）
+async function vfsRefreshCache(remoteName) {
+  if (refreshingCacheRemotes.has(remoteName)) return;
+  refreshingCacheRemotes.add(remoteName);
+  try {
+    const msg = await invoke("vfs_refresh_cache", {
+      rclonePath: customRclonePath.value.trim() || null,
+      remote: remoteName
+    });
+    showToast(`✅ ${msg}`, "success");
+  } catch (err) {
+    showToast(`刷新快取失敗: ${err}`, "error");
+  } finally {
+    refreshingCacheRemotes.delete(remoteName);
   }
 }
 
@@ -2484,6 +2502,16 @@ onUnmounted(() => {
                 >
                   <FolderOpen class="btn-icon" />
                   <span>開啟檔案總管</span>
+                </button>
+
+                <button
+                  class="btn btn-cache-refresh"
+                  @click="vfsRefreshCache(remote.name)"
+                  :disabled="refreshingCacheRemotes.has(remote.name)"
+                  title="強制刷新 VFS 目錄快取，讓新增/刪除的檔案立即出現在磁碟中"
+                >
+                  <FolderSync class="btn-icon" :class="{ 'spin-anim': refreshingCacheRemotes.has(remote.name) }" />
+                  <span>{{ refreshingCacheRemotes.has(remote.name) ? '刷新中...' : '刷新快取' }}</span>
                 </button>
 
                 <button
@@ -6880,5 +6908,51 @@ onUnmounted(() => {
   width: 12px;
   height: 12px;
   color: #38bdf8;
+}
+
+/* ── 手動刷新快取按鈕 ── */
+.btn-cache-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-cache-refresh:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+  box-shadow: 0 0 12px -2px rgba(245, 158, 11, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-cache-refresh:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-cache-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+[data-theme="light"] .btn-cache-refresh {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+[data-theme="light"] .btn-cache-refresh:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.18);
+  color: #78350f;
 }
 </style>

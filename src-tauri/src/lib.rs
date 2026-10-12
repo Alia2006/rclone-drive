@@ -863,6 +863,57 @@ fn open_in_explorer(drive_letter: String) -> Result<(), String> {
     Ok(())
 }
 
+/// 強制刷新指定掛載遠端的 VFS 目錄快取（解決新檔案不顯示問題）
+#[tauri::command]
+fn vfs_refresh_cache(
+    state: State<'_, AppState>,
+    rclone_path: Option<String>,
+    remote: String,
+) -> Result<String, String> {
+    let exe = resolve_rclone_path(rclone_path);
+
+    // 從 AppState 取得此遠端的 RC port
+    let rc_port = {
+        let mounts = state.mounts.lock().unwrap();
+        mounts.get(&remote).and_then(|m| m.rc_port)
+    };
+
+    let rc_url = match rc_port {
+        Some(port) => format!("http://127.0.0.1:{}", port),
+        None => {
+            // 找不到 RC port（可能 warmUp 未啟用），嘗試預設端口 5575
+            "http://127.0.0.1:5575".to_string()
+        }
+    };
+
+    let mut cmd = Command::new(&exe);
+    cmd.args([
+        "rc",
+        "--url",
+        &rc_url,
+        "--rc-no-auth",
+        "vfs/refresh",
+        "recursive=true",
+        "_async=true",
+    ]);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd.output().map_err(|e| format!("執行 vfs/refresh 失敗: {}", e))?;
+
+    if output.status.success() {
+        Ok(format!("已成功對 {} 發送快取刷新請求（非同步執行中）", remote))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // 若 RC 連線失敗（可能 warmUp=false 導致沒有 RC server），給出友善說明
+        if stderr.contains("connection refused") || stderr.contains("EOF") || stdout.is_empty() && stderr.is_empty() {
+            Err("此掛載未啟用 RC 遠端控制（請在效能設定中開啟「背景預熱 Warm-up」後重新掛載）".to_string())
+        } else {
+            Err(format!("刷新快取失敗: {} {}", stderr, stdout).trim().to_string())
+        }
+    }
+}
+
 #[tauri::command]
 fn unmount_all(state: State<'_, AppState>) -> Result<usize, String> {
     let mut mounts = state.mounts.lock().unwrap();
@@ -1646,6 +1697,7 @@ pub fn run() {
             download_and_install_update,
             open_rclone_config_terminal,
             get_supported_providers,
+            vfs_refresh_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
