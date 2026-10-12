@@ -878,13 +878,14 @@ fn vfs_refresh_cache(
         mounts.get(&remote).and_then(|m| m.rc_port)
     };
 
-    let rc_url = match rc_port {
-        Some(port) => format!("http://127.0.0.1:{}", port),
+    let rc_port = match rc_port {
+        Some(port) => port,
         None => {
-            // 找不到 RC port（可能 warmUp 未啟用），嘗試預設端口 5575
-            "http://127.0.0.1:5575".to_string()
+            return Err("此磁碟機掛載時未啟用 RC 遠端控制埠。請先將此磁碟「卸載」後重新「掛載」，即可使用刷新快取！".to_string());
         }
     };
+
+    let rc_url = format!("http://127.0.0.1:{}", rc_port);
 
     let mut cmd = Command::new(&exe);
     cmd.args([
@@ -901,13 +902,13 @@ fn vfs_refresh_cache(
     let output = cmd.output().map_err(|e| format!("執行 vfs/refresh 失敗: {}", e))?;
 
     if output.status.success() {
-        Ok(format!("已成功對 {} 發送快取刷新請求（非同步執行中）", remote))
+        Ok(format!("已成功發送快取刷新請求（非同步背景更新中）"))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        // 若 RC 連線失敗（可能 warmUp=false 導致沒有 RC server），給出友善說明
-        if stderr.contains("connection refused") || stderr.contains("EOF") || stdout.is_empty() && stderr.is_empty() {
-            Err("此掛載未啟用 RC 遠端控制（請在效能設定中開啟「背景預熱 Warm-up」後重新掛載）".to_string())
+        let combined = format!("{} {}", stderr, stdout).to_lowercase();
+        if combined.contains("refused") || combined.contains("connection failed") || combined.contains("eof") {
+            Err("無法連線至 Rclone 遠端控制埠（請先「卸載」後重新「掛載」此磁碟機以啟用 RC 服務）".to_string())
         } else {
             Err(format!("刷新快取失敗: {} {}", stderr, stdout).trim().to_string())
         }

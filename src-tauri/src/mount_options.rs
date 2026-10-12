@@ -285,18 +285,15 @@ impl MountPerformanceOptions {
             }
         }
 
-        // 4. 背景預熱 RC API 支援
+        // 4. 遠端控制 RC API 支援（所有模式均分配專屬 RC port，供手動刷新快取及預熱使用）
+        let port = get_available_port().unwrap_or(5575);
+        cmd.arg("--rc");
+        cmd.arg("--rc-addr");
+        cmd.arg(format!("127.0.0.1:{}", port));
+        cmd.arg("--rc-no-auth");
+        let rc_port = Some(port);
+
         let do_warmup = self.warm_up.unwrap_or(true);
-        let rc_port = if do_warmup {
-            let port = get_available_port().unwrap_or(5575);
-            cmd.arg("--rc");
-            cmd.arg("--rc-addr");
-            cmd.arg(format!("127.0.0.1:{}", port));
-            cmd.arg("--rc-no-auth");
-            Some(port)
-        } else {
-            None
-        };
 
         // 5. 額外使用者 Flags
         if let Some(ref extra) = self.extra_flags {
