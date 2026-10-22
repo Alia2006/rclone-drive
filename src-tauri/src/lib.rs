@@ -332,7 +332,7 @@ async fn auto_install_rclone() -> Result<String, String> {
 
             $foundExe = Get-ChildItem -Path $tempExtract -Recurse -Filter "rclone.exe" | Select-Object -First 1
             if (-not $foundExe) {
-                throw "無法在下載的壓縮包中找到 rclone.exe"
+                throw "无法在下载的压缩包中找到 rclone.exe"
             }
 
             $targetDir = "C:\rclone"
@@ -364,20 +364,20 @@ async fn auto_install_rclone() -> Result<String, String> {
         let mut cmd = Command::new("powershell.exe");
         cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let output = cmd.output().map_err(|e| format!("執行下載安裝失敗: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("运行下载安装失败: {}", e))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
             let out = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("安裝 Rclone 失敗: {} {}", err.trim(), out.trim()));
+            return Err(format!("安装 Rclone 失败: {} {}", err.trim(), out.trim()));
         }
         let installed_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if installed_path.is_empty() {
-            return Err("下載完成但未取得安裝路徑".to_string());
+            return Err("下载完成但未获取安装路径".to_string());
         }
         Ok(installed_path)
     })
     .await
-    .map_err(|e| format!("執行緒錯誤: {}", e))?
+    .map_err(|e| format!("线程错误: {}", e))?
 }
 
 #[tauri::command]
@@ -400,15 +400,15 @@ async fn auto_install_winfsp() -> Result<String, String> {
         let mut cmd = Command::new("powershell.exe");
         cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let output = cmd.output().map_err(|e| format!("啟動 WinFsp 安裝程式失敗: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("启动 WinFsp 安装程序失败: {}", e))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("下載或安裝 WinFsp 失敗: {}", err.trim()));
+            return Err(format!("下载或安装 WinFsp 失败: {}", err.trim()));
         }
-        Ok("WinFsp 安裝程式已執行完畢".to_string())
+        Ok("WinFsp 安装程序已运行完毕".to_string())
     })
     .await
-    .map_err(|e| format!("執行緒錯誤: {}", e))?
+    .map_err(|e| format!("线程错误: {}", e))?
 }
 
 #[tauri::command]
@@ -417,10 +417,10 @@ async fn download_and_install_update(
     state: State<'_, AppState>,
     download_url: String,
 ) -> Result<String, String> {
-    // 1. 更新前先安全解除所有已掛載的磁碟機與行程！
+    // 1. 更新前先安全卸载所有已挂载的磁盘与进程！
     let _ = unmount_all(state);
 
-    // 2. 下載並啟動更新安裝程式
+    // 2. 下载并启动更新安装程序
     let res = tauri::async_runtime::spawn_blocking(move || {
         let script = format!(
             r#"
@@ -434,9 +434,9 @@ async fn download_and_install_update(
             $tempFile = Join-Path $env:TEMP $fileName
             Invoke-WebRequest -Uri $url -OutFile $tempFile -UseBasicParsing
             if (-not (Test-Path $tempFile)) {{
-                throw "下載完成但無法在暫存目錄找到檔案"
+                throw "下载完成但无法在临时目录找到文件"
             }}
-            # 等待 1 秒讓舊版主程式準備退出，接著啟動安裝程式
+            # 等待 1 秒让旧版主程序准备退出，接着启动安装程序
             Start-Sleep -Seconds 1
             if ($tempFile.EndsWith(".msi")) {{
                 Start-Process msiexec.exe -ArgumentList "/i `"$tempFile`""
@@ -451,18 +451,18 @@ async fn download_and_install_update(
         let mut cmd = Command::new("powershell.exe");
         cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &script]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let output = cmd.output().map_err(|e| format!("執行更新程式失敗: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("运行更新程序失败: {}", e))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
             let out = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("下載或啟動更新失敗: {} {}", err.trim(), out.trim()));
+            return Err(format!("下载或启动更新失败: {} {}", err.trim(), out.trim()));
         }
-        Ok("更新安裝程式已成功啟動".to_string())
+        Ok("更新安装程序已成功启动".to_string())
     })
     .await
-    .map_err(|e| format!("執行緒錯誤: {}", e))?;
+    .map_err(|e| format!("线程错误: {}", e))?;
 
-    // 3. 啟動安裝程式後，延遲 600ms 自動退出目前執行中的舊版應用程式，避免檔案被佔用
+    // 3. 启动安装程序后，延迟 600ms 自动退出目前运行中的旧版应用程序，避免文件被占用
     if res.is_ok() {
         let app_clone = app.clone();
         thread::spawn(move || {
@@ -549,14 +549,14 @@ fn get_remotes(
     cmd.args(["config", "dump"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("無法執行 rclone config dump: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("无法运行 rclone config dump: {}", e))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("讀取 rclone 設定失敗: {}", err));
+        return Err(format!("读取 rclone 设置失败: {}", err));
     }
 
     let json_val: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("解析 rclone 設定 JSON 失敗: {}", e))?;
+        .map_err(|e| format!("解析 rclone 设置 JSON 失败: {}", e))?;
 
     let mounts = state.mounts.lock().unwrap();
     let mut remotes = Vec::new();
@@ -721,14 +721,14 @@ fn mount_remote(
     {
         let mounts = state.mounts.lock().unwrap();
         if mounts.contains_key(&remote) {
-            return Err(format!("遠端 '{}' 已經掛載中！", remote));
+            return Err(format!("远程 '{}' 已经挂载中！", remote));
         }
     }
 
     let clean_letter = drive_letter.trim().trim_end_matches(':').trim_end_matches('\\').to_uppercase();
     let root_path = format!("{clean_letter}:\\");
     if Path::new(&root_path).exists() {
-        return Err(format!("磁碟機代號 {clean_letter}: 已被本機其他裝置佔用！"));
+        return Err(format!("盘符 {clean_letter}: 已被本机其他设备占用！"));
     }
 
     let v_name = volname.unwrap_or_else(|| remote.clone());
@@ -760,7 +760,7 @@ fn mount_remote(
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.stderr(Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|e| format!("啟動 rclone 掛載行程失敗: {}", e))?;
+    let mut child = cmd.spawn().map_err(|e| format!("启动 rclone 挂载进程失败: {}", e))?;
     let pid = child.id();
 
     let mut mounted = false;
@@ -772,11 +772,11 @@ fn mount_remote(
                 let _ = stderr.read_to_string(&mut err_msg);
             }
             let detail = if err_msg.trim().is_empty() {
-                format!("狀態碼: {:?}", status.code())
+                format!("状态码: {:?}", status.code())
             } else {
                 err_msg.trim().to_string()
             };
-            return Err(format!("掛載失敗: rclone 行程已退出 ({detail})。請確認代號是否衝突或設定是否有效。"));
+            return Err(format!("挂载失败: rclone 进程已退出 ({detail})。请确认盘符是否冲突或设置是否有效。"));
         }
         if Path::new(&root_path).exists() {
             mounted = true;
@@ -794,7 +794,7 @@ fn mount_remote(
         kill_cmd.args(["/F", "/PID", &pid.to_string(), "/T"]);
         kill_cmd.creation_flags(CREATE_NO_WINDOW);
         let _ = kill_cmd.output();
-        return Err(format!("掛載逾時，磁碟機 {clean_letter}: 未能及時就緒。請確認 WinFsp 正常運行。"));
+        return Err(format!("挂载超时，磁盘 {clean_letter}: 未能及时就绪。请确认 WinFsp 正常运行。"));
     }
 
     // Non-blocking Warm-up in background if enabled
@@ -851,7 +851,7 @@ fn unmount_remote(state: State<'_, AppState>, remote: String) -> Result<bool, St
 
         Ok(true)
     } else {
-        Err(format!("找不到已掛載的遠端 '{}'", remote))
+        Err(format!("找不到已挂载的远程 '{}'", remote))
     }
 }
 
@@ -859,11 +859,11 @@ fn unmount_remote(state: State<'_, AppState>, remote: String) -> Result<bool, St
 fn open_in_explorer(drive_letter: String) -> Result<(), String> {
     let mut cmd = Command::new("explorer.exe");
     cmd.arg(format!("{}\\", drive_letter.trim()));
-    cmd.spawn().map_err(|e| format!("開啟檔案總管失敗: {}", e))?;
+    cmd.spawn().map_err(|e| format!("打开资源管理器失败: {}", e))?;
     Ok(())
 }
 
-/// 強制刷新指定掛載遠端的 VFS 目錄快取（解決新檔案不顯示問題）
+/// 强制刷新指定挂载远程的 VFS 目录缓存（解决新文件不显示问题）
 #[tauri::command]
 fn vfs_refresh_cache(
     state: State<'_, AppState>,
@@ -872,7 +872,7 @@ fn vfs_refresh_cache(
 ) -> Result<String, String> {
     let exe = resolve_rclone_path(rclone_path);
 
-    // 從 AppState 取得此遠端的 RC port
+    // 从 AppState 获取此远程的 RC 端口
     let rc_port = {
         let mounts = state.mounts.lock().unwrap();
         mounts.get(&remote).and_then(|m| m.rc_port)
@@ -881,7 +881,7 @@ fn vfs_refresh_cache(
     let rc_port = match rc_port {
         Some(port) => port,
         None => {
-            return Err("此磁碟機掛載時未啟用 RC 遠端控制埠。請先將此磁碟「卸載」後重新「掛載」，即可使用刷新快取！".to_string());
+            return Err("此磁盘挂载时未启用 RC 远程控制端口。请先将此磁盘「卸载」后重新「挂载」，即可使用刷新缓存！".to_string());
         }
     };
 
@@ -899,18 +899,18 @@ fn vfs_refresh_cache(
     ]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("執行 vfs/refresh 失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("运行 vfs/refresh 失败: {}", e))?;
 
     if output.status.success() {
-        Ok(format!("已成功發送快取刷新請求（非同步背景更新中）"))
+        Ok(format!("已成功发送缓存刷新请求（异步后台更新中）"))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let combined = format!("{} {}", stderr, stdout).to_lowercase();
         if combined.contains("refused") || combined.contains("connection failed") || combined.contains("eof") {
-            Err("無法連線至 Rclone 遠端控制埠（請先「卸載」後重新「掛載」此磁碟機以啟用 RC 服務）".to_string())
+            Err("无法连接至 Rclone 远程控制端口（请先「卸载」后重新「挂载」此磁盘以启用 RC 服务）".to_string())
         } else {
-            Err(format!("刷新快取失敗: {} {}", stderr, stdout).trim().to_string())
+            Err(format!("刷新缓存失败: {} {}", stderr, stdout).trim().to_string())
         }
     }
 }
@@ -960,7 +960,7 @@ async fn create_remote_gui(
 
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let mut child = cmd.spawn().map_err(|e| format!("執行 rclone config create 失敗: {}", e))?;
+        let mut child = cmd.spawn().map_err(|e| format!("运行 rclone config create 失败: {}", e))?;
 
         if is_onedrive {
             if let Some(mut stdin) = child.stdin.take() {
@@ -968,19 +968,19 @@ async fn create_remote_gui(
             }
         }
 
-        let output = child.wait_with_output().map_err(|e| format!("等待建立失敗: {}", e))?;
+        let output = child.wait_with_output().map_err(|e| format!("等待创建失败: {}", e))?;
         if output.status.success() {
             if is_onedrive {
                 let _ = auto_heal_onedrive_config(&exe, &name);
             }
-            Ok(format!("成功建立遠端 '{}'！", name))
+            Ok(format!("成功创建远程 '{}'！", name))
         } else {
             let err = String::from_utf8_lossy(&output.stderr);
-            Err(format!("建立失敗: {}", err))
+            Err(format!("创建失败: {}", err))
         }
     })
     .await
-    .map_err(|e| format!("執行建立失敗: {}", e))?
+    .map_err(|e| format!("运行创建失败: {}", e))?
 }
 
 // GUI Remote Config Update & Optional Rename
@@ -1013,11 +1013,11 @@ fn update_remote_gui(
             || target_name.contains('>')
             || target_name.contains('|')
         {
-            return Err("雲端硬碟名稱不可包含特殊字元 (: / \\ [ ] * ? < > | \")".to_string());
+            return Err("云端硬盘名称不可包含特殊字符 (: / \\ [ ] * ? < > | \")".to_string());
         }
 
-        let conf_path = get_rclone_conf_path(&exe).ok_or_else(|| "找不到 rclone.conf 設定檔路徑！".to_string())?;
-        let content = std::fs::read_to_string(&conf_path).map_err(|e| format!("無法讀取 rclone.conf: {}", e))?;
+        let conf_path = get_rclone_conf_path(&exe).ok_or_else(|| "找不到 rclone.conf 配置文件路径！".to_string())?;
+        let content = std::fs::read_to_string(&conf_path).map_err(|e| format!("无法读取 rclone.conf: {}", e))?;
 
         let old_header = format!("[{}]", old_name);
         let new_header = format!("[{}]", target_name);
@@ -1026,7 +1026,7 @@ fn update_remote_gui(
         for line in content.lines() {
             let t = line.trim();
             if t.eq_ignore_ascii_case(&new_header) && !t.eq_ignore_ascii_case(&old_header) {
-                return Err(format!("雲端硬碟名稱 '{}' 已經存在，請更換其他名稱！", target_name));
+                return Err(format!("云端硬盘名称 '{}' 已经存在，请更换其他名称！", target_name));
             }
             if t.eq_ignore_ascii_case(&old_header) {
                 found_old = true;
@@ -1034,7 +1034,7 @@ fn update_remote_gui(
         }
 
         if !found_old {
-            return Err(format!("找不到原設定名稱 '{}'", old_name));
+            return Err(format!("找不到原设置名称 '{}'", old_name));
         }
 
         let mut new_lines = Vec::new();
@@ -1048,7 +1048,7 @@ fn update_remote_gui(
             }
         }
         let new_content = new_lines.join("\r\n") + "\r\n";
-        std::fs::write(&conf_path, new_content).map_err(|e| format!("寫入 rclone.conf 失敗: {}", e))?;
+        std::fs::write(&conf_path, new_content).map_err(|e| format!("写入 rclone.conf 失败: {}", e))?;
 
         // Update active mounts tracking if currently mounted
         {
@@ -1081,17 +1081,17 @@ fn update_remote_gui(
 
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let output = cmd.output().map_err(|e| format!("執行 rclone config update 失敗: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("运行 rclone config update 失败: {}", e))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("更新失敗: {}", err));
+            return Err(format!("更新失败: {}", err));
         }
     }
 
     if target_name != old_name {
-        Ok(format!("成功將雲端硬碟名稱更名為 '{}' 並儲存設定！", target_name))
+        Ok(format!("成功将云端硬盘名称更名为 '{}' 并保存设置！", target_name))
     } else {
-        Ok(format!("成功更新遠端 '{}' 的設定！", active_name))
+        Ok(format!("成功更新远程 '{}' 的设置！", active_name))
     }
 }
 
@@ -1108,22 +1108,22 @@ async fn reconnect_remote_gui(
         cmd.stdin(Stdio::piped());
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let mut child = cmd.spawn().map_err(|e| format!("執行重新連線失敗: {}", e))?;
+        let mut child = cmd.spawn().map_err(|e| format!("运行重新连接失败: {}", e))?;
         if let Some(mut stdin) = child.stdin.take() {
             let _ = stdin.write_all(b"1\n0\ny\ny\n");
         }
 
-        let output = child.wait_with_output().map_err(|e| format!("等待重新授權失敗: {}", e))?;
+        let output = child.wait_with_output().map_err(|e| format!("等待重新授权失败: {}", e))?;
         if output.status.success() {
             let _ = auto_heal_onedrive_config(&exe, &name);
-            Ok(format!("遠端 '{}' 重新授權登入成功！", name))
+            Ok(format!("远程 '{}' 重新授权登录成功！", name))
         } else {
             let err = String::from_utf8_lossy(&output.stderr);
-            Err(format!("重新授權失敗: {}", err))
+            Err(format!("重新授权失败: {}", err))
         }
     })
     .await
-    .map_err(|e| format!("執行重新授權失敗: {}", e))?
+    .map_err(|e| format!("运行重新授权失败: {}", e))?
 }
 
 // Get Single Remote Configuration Detail
@@ -1137,9 +1137,9 @@ fn get_remote_detail(
     cmd.args(["config", "dump"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("讀取設定失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("读取设置失败: {}", e))?;
     let json_val: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("解析設定 JSON 失敗: {}", e))?;
+        .map_err(|e| format!("解析设置 JSON 失败: {}", e))?;
 
     let mut result = HashMap::new();
     if let Some(remote_obj) = json_val.get(&name).and_then(|v| v.as_object()) {
@@ -1168,12 +1168,12 @@ fn delete_remote_gui(
     cmd.args(["config", "delete", &name]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("刪除遠端失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("删除远程失败: {}", e))?;
     if output.status.success() {
         Ok(true)
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("刪除失敗: {}", err))
+        Err(format!("删除失败: {}", err))
     }
 }
 
@@ -1202,7 +1202,7 @@ fn toggle_rclone_webgui(
         ]);
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let child = cmd.spawn().map_err(|e| format!("啟動 Web-GUI 失敗: {}", e))?;
+        let child = cmd.spawn().map_err(|e| format!("启动 Web-GUI 失败: {}", e))?;
         *gui_guard = Some(child.id());
         Ok(true)
     } else {
@@ -1221,7 +1221,7 @@ fn open_browser_url(url: String) -> Result<(), String> {
     let mut cmd = Command::new("cmd.exe");
     cmd.args(["/c", "start", "", &url]);
     cmd.creation_flags(CREATE_NO_WINDOW);
-    let _ = cmd.spawn().map_err(|e| format!("無法開啟預設瀏覽器: {}", e))?;
+    let _ = cmd.spawn().map_err(|e| format!("无法打开默认浏览器: {}", e))?;
     Ok(())
 }
 
@@ -1229,8 +1229,8 @@ fn open_browser_url(url: String) -> Result<(), String> {
 fn open_rclone_config_terminal(rclone_path: Option<String>) -> Result<(), String> {
     let exe = resolve_rclone_path(rclone_path);
     let mut cmd = Command::new("cmd.exe");
-    cmd.args(["/c", "start", "Rclone Config 互動設定精靈", "cmd.exe", "/k", &format!("\"{}\" config", exe)]);
-    let _ = cmd.spawn().map_err(|e| format!("無法啟動原版設定精靈視窗: {}", e))?;
+    cmd.args(["/c", "start", "Rclone Config 交互设置向导", "cmd.exe", "/k", &format!("\"{}\" config", exe)]);
+    let _ = cmd.spawn().map_err(|e| format!("无法启动原版设置向导窗口: {}", e))?;
     Ok(())
 }
 
@@ -1241,14 +1241,14 @@ fn get_supported_providers(rclone_path: Option<String>) -> Result<Vec<serde_json
     cmd.args(["config", "providers"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("執行 rclone config providers 失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("运行 rclone config providers 失败: {}", e))?;
     if output.status.success() {
         let list: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout)
-            .map_err(|e| format!("解析 providers JSON 失敗: {}", e))?;
+            .map_err(|e| format!("解析 providers JSON 失败: {}", e))?;
         Ok(list)
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("讀取 providers 失敗: {}", err))
+        Err(format!("读取 providers 失败: {}", err))
     }
 }
 
@@ -1258,7 +1258,7 @@ fn select_local_folder() -> Result<Option<String>, String> {
     let script = r#"
         [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
         $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-        $dialog.Description = "請選擇資料夾"
+        $dialog.Description = "请选择文件夹"
         $dialog.ShowNewFolderButton = $true
         if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -1270,7 +1270,7 @@ fn select_local_folder() -> Result<Option<String>, String> {
         .args(["-STA", "-NoProfile", "-Command", script])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map_err(|e| format!("開啟資料夾瀏覽視窗失敗: {}", e))?;
+        .map_err(|e| format!("打开文件夹浏览窗口失败: {}", e))?;
 
     let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if path_str.is_empty() {
@@ -1291,10 +1291,10 @@ fn list_remote_dirs(
     cmd.args(["lsf", &remote_path, "--dirs-only"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("讀取雲端目錄失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("读取云端目录失败: {}", e))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("列出目錄失敗: {}", err));
+        return Err(format!("列出目录失败: {}", err));
     }
 
     let out_str = String::from_utf8_lossy(&output.stdout);
@@ -1392,7 +1392,7 @@ fn check_folder_diff(
 
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("執行比對失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("运行比对失败: {}", e))?;
     let out_str = String::from_utf8_lossy(&output.stdout);
 
     let mut items = Vec::new();
@@ -1484,10 +1484,10 @@ fn check_folder_diff(
     }
 
     let message = if total_s == 0 && total_d == 0 && total_diff == 0 && total_err == 0 {
-        "兩端檔案完全一致，無任何差異！".to_string()
+        "两端文件完全一致，无任何差异！".to_string()
     } else {
         format!(
-            "比對完成：來源待同步 {} 檔，目的端多出 {} 檔，內容差異 {} 檔，一致 {} 檔",
+            "比对完成：来源待同步 {} 个，目标端多出 {} 个，内容差异 {} 个，一致 {} 个",
             total_s, total_d, total_diff, total_eq
         )
     };
@@ -1513,7 +1513,7 @@ fn copy_specific_files(
     files: Vec<String>,
 ) -> Result<String, String> {
     if files.is_empty() {
-        return Err("請先勾選要複製的檔案項目！".to_string());
+        return Err("请先勾选要拷贝的文件！".to_string());
     }
 
     let exe = resolve_rclone_path(rclone_path);
@@ -1529,15 +1529,15 @@ fn copy_specific_files(
     cmd.arg("-v");
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("執行複製失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("运行拷贝失败: {}", e))?;
     if output.status.success() {
         let err_log = String::from_utf8_lossy(&output.stderr);
         let out_log = String::from_utf8_lossy(&output.stdout);
         let combined = format!("{}\n{}", out_log.trim(), err_log.trim());
-        Ok(if combined.trim().is_empty() { "檔案已成功複製完成！".to_string() } else { combined.trim().to_string() })
+        Ok(if combined.trim().is_empty() { "文件已成功拷贝完成！".to_string() } else { combined.trim().to_string() })
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("複製失敗: {}", err))
+        Err(format!("拷贝失败: {}", err))
     }
 }
 
@@ -1573,15 +1573,15 @@ fn run_sync_task(
     cmd.arg("-v");
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("執行同步/備份任務失敗: {}", e))?;
+    let output = cmd.output().map_err(|e| format!("运行同步/备份任务失败: {}", e))?;
     if output.status.success() {
         let err_log = String::from_utf8_lossy(&output.stderr);
         let out_log = String::from_utf8_lossy(&output.stdout);
         let combined = format!("{}\n{}", out_log.trim(), err_log.trim());
-        Ok(if combined.trim().is_empty() { "任務執行成功完成！".to_string() } else { combined.trim().to_string() })
+        Ok(if combined.trim().is_empty() { "任务运行成功完成！".to_string() } else { combined.trim().to_string() })
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("任務失敗: {}", err))
+        Err(format!("任务失败: {}", err))
     }
 }
 
@@ -1604,9 +1604,9 @@ pub fn run() {
             // Ensure drive icons directory exists
             let _ = ensure_drive_icons();
 
-            let quit_i = MenuItemBuilder::with_id("quit", "結束 (Quit)").build(app)?;
-            let show_i = MenuItemBuilder::with_id("show", "開啟儀表板 (Show Dashboard)").build(app)?;
-            let webgui_i = MenuItemBuilder::with_id("webgui", "開啟 Rclone Web-GUI (瀏覽器)").build(app)?;
+            let quit_i = MenuItemBuilder::with_id("quit", "结束 (Quit)").build(app)?;
+            let show_i = MenuItemBuilder::with_id("show", "打开仪表盘 (Show Dashboard)").build(app)?;
+            let webgui_i = MenuItemBuilder::with_id("webgui", "打开 Rclone Web-GUI (浏览器)").build(app)?;
             let menu = MenuBuilder::new(app)
                 .items(&[&show_i, &webgui_i, &quit_i])
                 .build()?;
@@ -1614,7 +1614,7 @@ pub fn run() {
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .tooltip("Rclone Drive - 雲端硬碟掛載與同步系統")
+                .tooltip("Rclone Drive - 云端硬盘挂载与同步系统")
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "show" => {

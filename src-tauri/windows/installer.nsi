@@ -241,7 +241,7 @@ Function PageReinstall
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(chooseMaintenanceOption)"
   ; Upgrading
   ${ElseIf} $R0 = 1
-    ; 升級模式：直接設定為不要解除安裝並略過詢問頁面，進行無縫原地升級覆蓋！
+    ; 升级模式：直接设置为不要卸载并跳过询问页面，进行无缝原地升级覆盖！
     StrCpy $ReinstallPageCheck 2
     Abort
   ; Downgrading

@@ -14,7 +14,7 @@ pub struct MountPerformanceOptions {
     #[serde(alias = "preset_mode", alias = "preset")]
     pub preset: Option<String>, // "fast" | "default" | "custom"
 
-    // 1. 目錄與屬性快取
+    // 1. 目录与属性缓存
     #[serde(alias = "dir_cache_time")]
     pub dir_cache_time: Option<String>,
     #[serde(alias = "poll_interval")]
@@ -24,7 +24,7 @@ pub struct MountPerformanceOptions {
     #[serde(alias = "no_modtime")]
     pub no_modtime: Option<bool>,
 
-    // 2. VFS 磁碟快取與讀取切片
+    // 2. VFS 磁盘缓存与读取切片
     #[serde(alias = "vfs_cache_mode")]
     pub vfs_cache_mode: Option<String>,
     #[serde(alias = "vfs_cache_max_size")]
@@ -44,11 +44,11 @@ pub struct MountPerformanceOptions {
     #[serde(alias = "enable_drive_pacer")]
     pub enable_drive_pacer: Option<bool>,
 
-    // 3. 背景預熱 (Warm-up)
+    // 3. 后台预热 (Warm-up)
     #[serde(alias = "warm_up")]
     pub warm_up: Option<bool>,
 
-    // 4. 自訂額外參數
+    // 4. 自定义额外参数
     #[serde(alias = "extra_flags")]
     pub extra_flags: Option<String>,
 }
@@ -60,7 +60,7 @@ impl Default for MountPerformanceOptions {
 }
 
 impl MountPerformanceOptions {
-    /// 官方推薦最佳化預設 (Fast Preset)
+    /// 官方推荐优化默认 (Fast Preset)
     pub fn fast_preset() -> Self {
         Self {
             preset: Some("fast".to_string()),
@@ -81,7 +81,7 @@ impl MountPerformanceOptions {
         }
     }
 
-    /// Rclone 官方標準原生預設 (Standard / Default Preset)
+    /// Rclone 官方标准原生默认 (Standard / Default Preset)
     pub fn default_preset() -> Self {
         Self {
             preset: Some("default".to_string()),
@@ -102,7 +102,7 @@ impl MountPerformanceOptions {
         }
     }
 
-    /// 從檔案載入設定檔 (rclone_mount_config.json)
+    /// 从配置文件加载设置 (rclone_mount_config.json)
     pub fn load_from_config_file() -> Option<Self> {
         let candidate_paths = [
             PathBuf::from("rclone_mount_config.json"),
@@ -129,20 +129,20 @@ impl MountPerformanceOptions {
         None
     }
 
-    /// 依優先順序合併：傳入選項 -> 系統環境變數 -> 設定檔 -> 推薦預設值
+    /// 依优先级合并：传入选项 -> 系统环境变量 -> 配置文件 -> 推荐默认值
     pub fn resolve(passed: Option<MountPerformanceOptions>, fallback_cache_mode: Option<String>) -> Self {
         let base = match passed.as_ref().and_then(|p| p.preset.as_deref()) {
             Some("default") => Self::default_preset(),
             Some("fast") => Self::fast_preset(),
             _ => {
-                // 若沒有指定特定 preset，先檢查外部設定檔或預設 fast
+                // 若没有指定特定 preset，先检查外部配置文件或默认 fast
                 Self::load_from_config_file().unwrap_or_else(Self::fast_preset)
             }
         };
 
         let mut final_opts = base;
 
-        // 1. 如果傳入了明確的選項欄位，逐項覆寫
+        // 1. 如果传入了明确的选项字段，逐项覆盖
         if let Some(p) = passed {
             if let Some(v) = p.preset { final_opts.preset = Some(v); }
             if let Some(v) = p.dir_cache_time { final_opts.dir_cache_time = Some(v); }
@@ -161,14 +161,14 @@ impl MountPerformanceOptions {
             if let Some(v) = p.extra_flags { final_opts.extra_flags = Some(v); }
         }
 
-        // 2. 如果呼叫端傳入傳統 cache_mode 參數，且使用者沒特別在 options 指定
+        // 2. 如果调用端传入传统 cache_mode 参数，且用户没特别在 options 指定
         if let Some(cm) = fallback_cache_mode {
             if final_opts.vfs_cache_mode.is_none() {
                 final_opts.vfs_cache_mode = Some(cm);
             }
         }
 
-        // 3. 環境變數覆寫 (最高全域覆寫層級)
+        // 3. 环境变量覆盖 (最高全局覆盖层级)
         if let Ok(val) = std::env::var("RCLONE_MOUNT_PRESET") {
             if !val.trim().is_empty() { final_opts.preset = Some(val); }
         }
@@ -215,9 +215,9 @@ impl MountPerformanceOptions {
         final_opts
     }
 
-    /// 將所有最佳化旗標加到 rclone mount 命令，並在需要 warm-up 時配置專屬 RC port
+    /// 将所有优化参数加到 rclone mount 命令，并在需要 warm-up 时配置专属 RC 端口
     pub fn apply_to_command(&self, cmd: &mut Command, remote_type: Option<&str>) -> (bool, Option<u16>) {
-        // 1. 目錄與屬性快取
+        // 1. 目录与属性缓存
         if let Some(ref val) = self.dir_cache_time {
             if !val.trim().is_empty() {
                 cmd.arg("--dir-cache-time");
@@ -240,7 +240,7 @@ impl MountPerformanceOptions {
             cmd.arg("--no-modtime");
         }
 
-        // 2. VFS 磁碟快取與切片
+        // 2. VFS 磁盘缓存与切片
         if let Some(ref val) = self.vfs_cache_max_size {
             if !val.trim().is_empty() {
                 cmd.arg("--vfs-cache-max-size");
@@ -285,7 +285,7 @@ impl MountPerformanceOptions {
             }
         }
 
-        // 4. 遠端控制 RC API 支援（所有模式均分配專屬 RC port，供手動刷新快取及預熱使用）
+        // 4. 远程控制 RC API 支持（所有模式均分配专属 RC port，供手动刷新缓存及预热使用）
         let port = get_available_port().unwrap_or(5575);
         cmd.arg("--rc");
         cmd.arg("--rc-addr");
@@ -295,7 +295,7 @@ impl MountPerformanceOptions {
 
         let do_warmup = self.warm_up.unwrap_or(true);
 
-        // 5. 額外使用者 Flags
+        // 5. 额外用户 Flags
         if let Some(ref extra) = self.extra_flags {
             for arg in split_shell_args(extra) {
                 if !arg.trim().is_empty() {
@@ -307,10 +307,10 @@ impl MountPerformanceOptions {
         (do_warmup, rc_port)
     }
 
-    /// 在背景執行緒非阻塞執行快取預熱 (vfs/refresh recursive=true)
+    /// 在后台线程非阻塞运行缓存预热 (vfs/refresh recursive=true)
     pub fn trigger_background_warmup(exe_path: String, rc_port: u16) {
         thread::spawn(move || {
-            // 等待掛載行程完全穩定並啟動 RC 服務
+            // 等待挂载进程完全稳定并启动 RC 服务
             thread::sleep(Duration::from_millis(1500));
             let rc_url = format!("http://127.0.0.1:{}", rc_port);
             let mut warm_cmd = Command::new(&exe_path);
@@ -329,7 +329,7 @@ impl MountPerformanceOptions {
     }
 }
 
-/// 取得一個可用的本機 TCP Port，避免多掛載或 WebGUI 端口碰撞
+/// 获取一个可用的本机 TCP 端口，避免多挂载或 WebGUI 端口冲突
 fn get_available_port() -> Option<u16> {
     TcpListener::bind("127.0.0.1:0")
         .ok()?
@@ -346,7 +346,7 @@ fn parse_env_bool(val: &str, default: bool) -> bool {
     }
 }
 
-/// 解析 extra_flags 命令列字串
+/// 解析 extra_flags 命令行字符串
 fn split_shell_args(input: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut current = String::new();

@@ -8,122 +8,122 @@
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-**輕量、現代化的全功能 Rclone 雲端硬碟虛擬掛載與同步排程工具（RaiDrive 替代方案）**
+**轻量、现代化的全功能 Rclone 云端硬盘虚拟挂载与同步调度工具（RaiDrive 替代方案）**
 
 </div>
 
 ---
 
-## 🌟 特色亮點
+## 🌟 特色亮点
 
-- **💽 虛擬硬碟掛載 (RaiDrive 體驗)**：
-  - 將 Google Drive、OneDrive、Dropbox、WebDAV、SFTP、S3 等雲端空間掛載為 Windows 本機磁碟代號（如 `Z:`、`Y:`、`X:`）。
-  - **各雲端專屬磁碟圖示**：掛載後檔案總管自動套用各雲端專屬圖示（如 Google Drive、Dropbox、OneDrive、WebDAV 等），告別空白白紙圖示。
-  - 全面採用穩定的網路磁碟機制（`--network-mode`），一般使用者權限即可秒速掛載，相容 Office 隨選即開與各類檔案讀寫。
-  - 支援 VFS 快取模式調整（`full` / `writes` / `minimal` / `off`）。
+- **💽 虚拟硬盘挂载 (RaiDrive 体验)**：
+  - 将 Google Drive、OneDrive、Dropbox、WebDAV、SFTP、S3 等云端空间挂载为 Windows 本机盘符（如 `Z:`、`Y:`、`X:`）。
+  - **各云端专属磁盘图标**：挂载后资源管理器自动应用各云端专属图标（如 Google Drive、Dropbox、OneDrive、WebDAV 等），告别空白的白纸图标。
+  - 全面采用稳定的网络磁盘机制（`--network-mode`），一般用户权限即可秒速挂载，兼容 Office 即点即用与各类文件读写。
+  - 支持 VFS 缓存模式调整（`full` / `writes` / `minimal` / `off`）。
 
-- **🎨 全圖形化雲端管理 (告別黑視窗)**：
-  - 內建精美圖形精靈，無需開啟命令提示字元黑視窗。
-  - 支援 Google Drive / OneDrive 預設瀏覽器一鍵 OAuth 登入授權與重新授權。
-  - 每張硬碟卡片均提供「修改設定」功能，可隨時調整密碼、帳號或連線網址。
+- **🎨 全图形化云端管理 (告别黑窗口)**：
+  - 内置精美的图形化向导，无需打开命令提示符黑窗口。
+  - 支持 Google Drive / OneDrive 默认浏览器一键 OAuth 登录授权与重新授权。
+  - 每张硬盘卡片均提供「修改设置」功能，可随时调整密码、账号或连接网址。
 
-- **🔄 檔案同步與差異比對 (RcloneView Plus 風格)**：
-  - 支援兩端路徑快速比對（`Check Diff`），視覺化標註新增、修改與缺失檔案。
-  - 提供單向鏡像同步（`Sync`）與安全增量備份（`Copy`）模式。
+- **🔄 文件同步与差异比对 (RcloneView Plus 风格)**：
+  - 支持两端路径快速比对（`Check Diff`），可视化标注添加、修改与缺失文件。
+  - 提供单向镜像同步（`Sync`）与安全增量备份（`Copy`）模式。
 
-- **⏰ 背景定時排程任務**：
-  - 可建立多組排程任務，定時自動將指定資料夾備份至雲端。
-  - 即使關閉視窗，只要常駐系統匣即可於背景自動執行。
+- **⏰ 后台定时调度任务**：
+  - 可创建多组调度任务，定时自动将指定文件夹备份至云端。
+  - 即使关闭窗口，只要常驻系统托盘即可在后台自动运行。
 
-- **🎛️ Windows 系統匣常駐與開機自啟 (System Tray)**：
-  - 點擊視窗關閉 (X) 自動最小化至右下角系統匣。
-  - 雙擊系統匣圖示即可秒開主介面，右鍵提供快捷操作選單。
-  - **開機自動啟動與縮小至系統匣**：支援登入 Windows 自動啟動，並可自由切換「開機啟動後直接縮小至系統匣常駐」或顯示主視窗。
+- **🎛️ Windows 系统托盘常驻与开机自启 (System Tray)**：
+  - 点击窗口关闭 (X) 自动最小化至右下角系统托盘。
+  - 双击系统托盘图标即可秒开主界面，右键提供快捷操作菜单。
+  - **开机自动启动与缩小至系统托盘**：支持登录 Windows 自动启动，并可自由切换「开机启动后直接缩小至系统托盘常驻」或显示主窗口。
 
-- **🌐 官方 Web-GUI 一鍵整合**：
-  - 內建 Rclone 原生 Web-GUI 伺服器啟動與控制，支援直接於瀏覽器分頁中進行進階操作。
+- **🌐 官方 Web-GUI 一键集成**：
+  - 内置 Rclone 原生 Web-GUI 服务器启动与控制，支持直接在浏览器标签页中进行高级操作。
 
-- **⚡ 體積極致輕巧**：
-  - 基於 Tauri v2 + WebView2，單一執行檔僅約 **4.5 MB**，記憶體佔用極低。
+- **⚡ 体积极致轻巧**：
+  - 基于 Tauri v2 + WebView2，单一可执行文件仅约 **4.5 MB**，内存占用极低。
 
 ---
 
-## 📋 系統要求
+## 📋 系统要求
 
 1. **Windows 10 / 11** (64-bit)
-2. **[WinFsp](https://winfsp.dev/)**（Windows 虛擬檔案系統核心，掛載磁碟代號必備依賴）
-3. **[Rclone](https://rclone.org/downloads/)**（預設路徑建議放於 `C:\rclone\rclone.exe`，亦可在軟體中自訂路徑）
+2. **[WinFsp](https://winfsp.dev/)**（Windows 虚拟文件系统核心，挂载盘符必备依赖）
+3. **[Rclone](https://rclone.org/downloads/)**（默认路径建议放于 `C:\rclone\rclone.exe`，亦可在软件中自定义路径）
 
 ---
 
-## 🚀 下載與使用
+## 🚀 下载与使用
 
-前往 [Releases 頁面](../../releases) 下載最新版本：
+前往 [Releases 页面](../../releases) 下载最新版本：
 
-- **標準安裝引導版 (`RcloneDrive_vX.X.X_x64_Setup.exe`)**：推薦！標準 NSIS 安裝精靈，自動建立桌面與開始功能表捷徑，支援原地覆蓋升級。
-- **單一免安裝便攜版 (`RcloneDrive_vX.X.X_Portable_x64.exe`)**：下載後隨開即用，免安裝，適合隨身碟或即時測試。
-- **MSI 安裝套件 (`RcloneDrive_vX.X.X_x64.msi`)**：企業大量部署適用的 Windows Installer 封裝。
+- **标准安装引导版 (`RcloneDrive_vX.X.X_x64_Setup.exe`)**：推荐！标准 NSIS 安装向导，自动创建桌面与开始菜单快捷方式，支持原地覆盖升级。
+- **单一免安装便携版 (`RcloneDrive_vX.X.X_Portable_x64.exe`)**：下载后开箱即用，免安装，适合U盘或临时测试。
+- **MSI 安装包 (`RcloneDrive_vX.X.X_x64.msi`)**：企业批量部署适用的 Windows Installer 打包格式。
 
 ---
 
-## 🛡️ 首次下載安全性提示（SmartScreen / 防毒軟體告警說明）
+## 🛡️ 首次下载安全性提示（SmartScreen / 杀毒软件告警说明）
 
-由於本專案為免費開源軟體，且每當新版本剛釋出時尚未累積大量下載信譽，部分防毒軟體（如 Symantec 賽門鐵克、趨勢科技）或 Windows Defender SmartScreen 可能會跳出安全性提示：
-- **「關於此檔案的資訊結果不明」**、**「極少使用者」**、**「極新」**
-- **「Windows 已保護您的電腦」**（SmartScreen 提示未知的發行者）
+由于本项目为免费开源软件，且每当新版本刚发布时尚未累积大量下载信誉，部分杀毒软件（如 Symantec 赛门铁克、趋势科技）或 Windows Defender SmartScreen 可能会弹出安全性提示：
+- **「关于此文件的信息结果不明」**、**「极少用户」**、**「极新」**
+- **「Windows 已保护你的电脑」**（SmartScreen 提示未知的发行者）
 
-### 💡 這是正常現象，請放心使用：
-1. **為什麼會跳出提示？**
-   商業軟體通常每年花費高額費用購買企業 EV 程式碼簽名憑證；開源專案在釋出全新版本時，防毒軟體信譽庫（Reputation-based Protection）因「樣本剛發布、在該防毒軟體使用者社群中累積下載次數較少」而主動提醒，並非含有惡意程式碼。本專案程式碼完全開源透明，歡迎檢閱審計。
-2. **如何允許執行？**
-   - **Symantec (賽門鐵克)**：點擊提示視窗中的 **「允許此檔案」** 即可正常執行。
-   - **Windows Defender SmartScreen**：點擊提示畫面上的 **「其他資訊」**（More info） ➔ 點選 **「仍要執行」**（Run anyway）。
-   - **Chrome / Edge 瀏覽器**：若下載時顯示安全性封鎖，點擊右側 `...` 選單 ➔ 點選 **「保留」** ➔ **「仍要保留」**。
+### 💡 这是正常现象，请放心使用：
+1. **为什么会弹出提示？**
+   商业软件通常每年花费高额费用购买企业 EV 代码签名证书；开源项目在发布全新版本时，杀毒软件信誉库（Reputation-based Protection）因「样本刚发布、在该杀毒软件用户社区中累积下载次数较少」而主动提醒，并非含有恶意代码。本项目代码完全开源透明，欢迎审阅审计。
+2. **如何允许运行？**
+   - **Symantec (赛门铁克)**：点击提示窗口中的 **「允许此文件」** 即可正常运行。
+   - **Windows Defender SmartScreen**：点击提示界面上的 **「更多信息」**（More info） ➔ 点击 **「仍要运行」**（Run anyway）。
+   - **Chrome / Edge 浏览器**：若下载时显示安全拦截，点击右侧 `...` 菜单 ➔ 点击 **「保留」** ➔ **「仍要保留」**。
 
-### 🔍 雜湊值比對驗證 (SHA-256 Checksum)
-為了確保您下載的檔案完整且未遭受任何第三方竄改，本專案在每次發行的 [GitHub Releases 頁面](../../releases) 均提供各檔案的 SHA-256 雜湊值（以及 `checksums.txt`）。
+### 🔍 哈希值比对验证 (SHA-256 Checksum)
+为了确保您下载的文件完整且未遭受任何第三方篡改，本项目在每次发行的 [GitHub Releases 页面](../../releases) 均提供各文件的 SHA-256 哈希值（以及 `checksums.txt`）。
 
-您可以在 Windows PowerShell 中執行以下指令檢驗下載檔案的雜湊值：
+您可以在 Windows PowerShell 中运行以下命令检验下载文件的哈希值：
 
 ```powershell
-# 檢驗安裝檔雜湊值
+# 检验安装包哈希值
 Get-FileHash .\RcloneDrive_v1.6.5_x64_Setup.exe -Algorithm SHA256
 
-# 檢驗便攜版雜湊值
+# 检验便携版哈希值
 Get-FileHash .\RcloneDrive_v1.6.5_Portable_x64.exe -Algorithm SHA256
 ```
 
-比對輸出的 `Hash` 字串是否與 GitHub Releases 頁面上公布的一致，即可 100% 確保檔案未受損壞或竄改！
+比对输出的 `Hash` 字符串是否与 GitHub Releases 页面上公布的一致，即可 100% 确保文件未受损坏或篡改！
 
 ---
 
-## 🛠️ 開發與編譯
+## 🛠️ 开发与编译
 
-本專案採用 **Tauri v2** + **Vue 3**：
+本项目采用 **Tauri v2** + **Vue 3**：
 
 ### 前置需求
 - [Node.js](https://nodejs.org/) (>= 18)
 - [Rust & Cargo](https://rustup.rs/) (MSVC toolchain)
 - Microsoft Visual Studio C++ Build Tools
 
-### 本地開發
+### 本地开发
 ```bash
-# 1. 安裝前端依賴
+# 1. 安装前端依赖
 npm install
 
-# 2. 啟動桌面開發預覽
+# 2. 启动桌面开发预览
 npm run tauri dev
 ```
 
-### 打包正式發行版
+### 打包正式发行版
 ```bash
-# 打包產出單一獨立 .exe 與安裝程式 (NSIS / MSI)
+# 打包产出单一独立 .exe 与安装程序 (NSIS / MSI)
 npm run tauri build
 ```
-產出的檔案將位於 `src-tauri/target/release/` 與 `src-tauri/target/release/bundle/nsis/`。
+产出的文件将位于 `src-tauri/target/release/` 与 `src-tauri/target/release/bundle/nsis/`。
 
 ---
 
-## 📄 開源授權
+## 📄 开源授权
 
-本專案基於 [MIT License](LICENSE) 開源。
+本项目基于 [MIT License](LICENSE) 开源。

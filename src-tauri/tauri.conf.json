@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Rclone Drive - 雲端硬碟掛載器",
+        "title": "Rclone Drive - 云端硬盘挂载器",
         "width": 1080,
         "height": 780,
         "minWidth": 880,
