@@ -652,14 +652,25 @@ async function checkForUpdates(manual = false) {
       let assetUrl = "";
       let assetName = "";
       if (Array.isArray(data.assets)) {
-        // 必须选择安装包（Setup 优先，其次 MSI），绝不能选免安装版：
-        // Portable exe 只会从 %TEMP% 直接运行，不会写入安装目录，重启后又回到旧版本
+        // 更新必须保持用户原有安装方式：
+        // NSIS 安装 → 只拿 Setup 安装包；MSI 安装 → 只拿 MSI；免安装/未知 → 不自动升级，打开发布页手动下载
         const assets = data.assets;
+        let installType = "portable";
+        try {
+          installType = await invoke("get_install_type");
+        } catch (_) {}
         const lower = (a) => a.name.toLowerCase();
-        const setupAsset = assets.find((a) => lower(a).endsWith(".exe") && /setup|installer/.test(lower(a)));
+        const setupAsset = assets.find(
+          (a) => lower(a).endsWith(".exe") && /setup|installer/.test(lower(a)) && !lower(a).includes("portable")
+        );
         const msiAsset = assets.find((a) => lower(a).endsWith(".msi"));
-        const plainExeAsset = assets.find((a) => lower(a).endsWith(".exe") && !lower(a).includes("portable"));
-        const chosen = setupAsset || plainExeAsset || msiAsset;
+        let chosen = null;
+        if (installType === "nsis") {
+          chosen = setupAsset || null;
+        } else if (installType === "msi") {
+          chosen = msiAsset || null;
+        }
+        // portable/unknown → chosen 为 null，downloadUrl 回落到发布页
         if (chosen) {
           assetUrl = chosen.browser_download_url;
           assetName = chosen.name;

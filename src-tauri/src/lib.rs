@@ -569,6 +569,29 @@ fn check_environment(state: State<'_, AppState>, rclone_path: Option<String>) ->
 }
 
 #[tauri::command]
+fn get_install_type() -> String {
+    // 按当前运行位置判断安装方式：
+    // %LOCALAPPDATA%\RcloneDrive → nsis（currentUser 安装）
+    // Program Files / Program Files (x86) → msi（per-machine 安装）
+    // 其余（临时目录、下载目录、开发目录）→ portable（免安装/未知，不做就地升级）
+    let exe = match std::env::current_exe() {
+        Ok(p) => p.to_string_lossy().to_lowercase(),
+        Err(_) => return "portable".to_string(),
+    };
+    let norm = |v: Result<String, std::env::VarError>| v.unwrap_or_default().to_lowercase();
+    let la = norm(std::env::var("LOCALAPPDATA"));
+    if !la.is_empty() && exe.starts_with(&format!("{}\\rclonedrive", la)) {
+        return "nsis".to_string();
+    }
+    let pf = norm(std::env::var("ProgramFiles"));
+    let pf86 = norm(std::env::var("ProgramFiles(x86)"));
+    if (!pf.is_empty() && exe.starts_with(&pf)) || (!pf86.is_empty() && exe.starts_with(&pf86)) {
+        return "msi".to_string();
+    }
+    "portable".to_string()
+}
+
+#[tauri::command]
 fn get_available_drives(state: State<'_, AppState>) -> Vec<String> {
     let mounts = state.mounts.lock().unwrap();
     let occupied_by_us: Vec<String> = mounts.values().map(|m| m.drive_letter.clone()).collect();
@@ -1808,6 +1831,7 @@ pub fn run() {
             auto_install_rclone,
             auto_install_winfsp,
             download_and_install_update,
+            get_install_type,
             open_rclone_config_terminal,
             get_supported_providers,
             vfs_refresh_cache,
