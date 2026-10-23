@@ -102,6 +102,8 @@
 - **单一免安装便携版 (`RcloneDrive_vX.X.X_Portable_x64.exe`)**：下载后开箱即用，免安装，适合U盘或临时测试。
 - **MSI 安装包 (`RcloneDrive_vX.X.X_x64.msi`)**：企业批量部署适用的 Windows Installer 打包格式。
 
+> 💡 **v1.6.7 及更早版本的旧用户**：应用内一键升级可能无法生效（看似更新成功、重启后仍是旧版），请手动下载最新安装包覆盖安装一次，之后即可正常使用应用内一键升级。
+
 ---
 
 ## 🛡️ 首次下载安全性提示（SmartScreen / 杀毒软件告警说明）
@@ -125,10 +127,10 @@
 
 ```powershell
 # 检验安装包哈希值
-Get-FileHash .\RcloneDrive_v1.6.8_x64_Setup.exe -Algorithm SHA256
+Get-FileHash .\RcloneDrive_v1.6.9_x64_Setup.exe -Algorithm SHA256
 
 # 检验便携版哈希值
-Get-FileHash .\RcloneDrive_v1.6.8_Portable_x64.exe -Algorithm SHA256
+Get-FileHash .\RcloneDrive_v1.6.9_Portable_x64.exe -Algorithm SHA256
 ```
 
 比对输出的 `Hash` 字符串是否与 GitHub Releases 页面上公布的一致，即可 100% 确保文件未受损坏或篡改！
