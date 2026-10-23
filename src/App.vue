@@ -391,6 +391,12 @@ function onS3ProviderSelect(form, provValue) {
   }
 }
 
+function onNewRemoteTypeChange() {
+  // 依协议套用正确的默认端口，避免 SFTP 误用 FTP 的 21 端口
+  const t = newRemoteForm.type;
+  newRemoteForm.port = t === "sftp" ? "22" : t === "smb" ? "445" : t === "ftp" ? "21" : "";
+}
+
 async function handleOpenRcloneTerminal() {
   try {
     await invoke("open_rclone_config_terminal", {
@@ -1097,13 +1103,13 @@ async function submitAddRemote() {
     if (newRemoteForm.port) params.port = newRemoteForm.port;
     if (newRemoteForm.domain) params.domain = newRemoteForm.domain;
   } else if (newRemoteForm.type === "ftp") {
-    params.host = newRemoteForm.host;
-    params.port = newRemoteForm.port || "21";
+    params.host = (newRemoteForm.host || "").trim();
+    params.port = (newRemoteForm.port || "21").trim();
     params.user = newRemoteForm.user;
     params.pass = newRemoteForm.pass;
   } else if (newRemoteForm.type === "sftp") {
-    params.host = newRemoteForm.host;
-    params.port = newRemoteForm.port || "22";
+    params.host = (newRemoteForm.host || "").trim();
+    params.port = (newRemoteForm.port || "22").trim();
     params.user = newRemoteForm.user;
     params.pass = newRemoteForm.pass;
   } else if (newRemoteForm.type === "b2") {
@@ -1171,7 +1177,7 @@ async function openEditModal(remote) {
   editRemoteForm.user = "";
   editRemoteForm.pass = "";
   editRemoteForm.host = "";
-  editRemoteForm.port = "21";
+  editRemoteForm.port = remote.remote_type === "sftp" ? "22" : remote.remote_type === "smb" ? "445" : "21";
   editRemoteForm.domain = "";
   editRemoteForm.clientId = "";
   editRemoteForm.clientSecret = "";
@@ -3432,7 +3438,7 @@ onUnmounted(() => {
               </button>
             </div>
 
-            <select v-model="newRemoteForm.type" class="modal-input">
+            <select v-model="newRemoteForm.type" class="modal-input" @change="onNewRemoteTypeChange">
               <optgroup
                 v-for="cat in filteredStorageCategories"
                 :key="cat.category"
@@ -3999,9 +4005,9 @@ onUnmounted(() => {
               <label class="group-title">主机位置 (Host)</label>
               <input type="text" v-model="editRemoteForm.host" class="modal-input" />
             </div>
-            <div class="setting-group" v-if="editRemoteForm.type === 'ftp'">
+            <div class="setting-group" v-if="editRemoteForm.type === 'ftp' || editRemoteForm.type === 'sftp'">
               <label class="group-title">连接端口 (Port)</label>
-              <input type="text" v-model="editRemoteForm.port" class="modal-input" />
+              <input type="text" v-model="editRemoteForm.port" class="modal-input" :placeholder="editRemoteForm.type === 'sftp' ? '22' : '21'" />
             </div>
             <div class="setting-group">
               <label class="group-title">用户账号</label>
