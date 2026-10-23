@@ -41,9 +41,9 @@
 
 | 文件名称 | SHA-256 哈希值 |
 | :--- | :--- |
-| RcloneDrive_v1.6.7_x64_Setup.exe | PENDING-SETUP |
-| RcloneDrive_v1.6.7_Portable_x64.exe | PENDING-PORTABLE |
-| RcloneDrive_v1.6.7_x64.msi | PENDING-MSI |
+| RcloneDrive_v1.6.7_x64_Setup.exe | 3adc0856f53d21a3310750ad4c49e047d0c1284a0597607fa79affb4387a0ce8 |
+| RcloneDrive_v1.6.7_Portable_x64.exe | 49ef0c4e7b847fdb1715e780dd53825d5ceb12c2d7854d05775e9928f2a0a370 |
+| RcloneDrive_v1.6.7_x64.msi | 65ac339c5cc2a1af59f60bfa02a37feef01116ec4703a52fb84997a684a8c791 |
 
 ---
 
