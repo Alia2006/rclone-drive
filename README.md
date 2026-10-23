@@ -14,10 +14,18 @@
 
 ---
 
+> **📌 项目来源声明**
+>
+> 本项目源自原作者 **[@alan0830](https://github.com/alan0830)** 的开源作品 [alan0830/rclone-drive](https://github.com/alan0830/rclone-drive)，感谢原作者提供的优秀基础实现。
+>
+> 当前维护仓库为 [**Alia2006/rclone-drive**](https://github.com/Alia2006/rclone-drive)，在本项目中原作者的基础之上继续维护并新增功能（中国大陆常用网盘支持、远程子路径挂载等）。原始代码与设计的版权归原作者所有，本项目遵循相同的 MIT 许可协议。
+
+---
+
 ## 🌟 特色亮点
 
 - **💽 虚拟硬盘挂载 (RaiDrive 体验)**：
-  - 将 Google Drive、OneDrive、Dropbox、WebDAV、SFTP、S3 等云端空间挂载为 Windows 本机盘符（如 `Z:`、`Y:`、`X:`）。
+  - 将 Google Drive、OneDrive、Dropbox、WebDAV、SFTP、S3、PikPak、坚果云、OpenList 聚合网盘等云端空间挂载为 Windows 本机盘符（如 `Z:`、`Y:`、`X:`）。
   - **各云端专属磁盘图标**：挂载后资源管理器自动应用各云端专属图标（如 Google Drive、Dropbox、OneDrive、WebDAV 等），告别空白的白纸图标。
   - 全面采用稳定的网络磁盘机制（`--network-mode`），一般用户权限即可秒速挂载，兼容 Office 即点即用与各类文件读写。
   - 支持 VFS 缓存模式调整（`full` / `writes` / `minimal` / `off`）。
@@ -43,8 +51,34 @@
 - **🌐 官方 Web-GUI 一键集成**：
   - 内置 Rclone 原生 Web-GUI 服务器启动与控制，支持直接在浏览器标签页中进行高级操作。
 
+- **🇨🇳 中国大陆常用网盘支持**：
+  - **PikPak**：rclone 原生直连，图形化输入账号密码即可挂载（rclone v1.63+ 原生支持）。
+  - **坚果云 (Nutstore)**：内置 WebDAV 预设，使用「应用密码」直连。
+  - **123 云盘**：内置官方 WebDAV 预设（VIP / SVIP 会员权益），使用「应用密码」直连。
+  - **百度网盘 / 阿里云盘 / 夸克网盘 / 115 / 天翼云盘 / 迅雷云盘**：官方 rclone 未内置其私有协议，本项目通过 OpenList / AList 的 WebDAV 接口统一挂载，可同时聚合多个网盘。
+
 - **⚡ 体积极致轻巧**：
   - 基于 Tauri v2 + WebView2，单一可执行文件仅约 **4.5 MB**，内存占用极低。
+
+---
+
+## 🇨🇳 中国大陆网盘支持方式
+
+| 网盘服务 | 支持方式 | 说明 |
+| --- | --- | --- |
+| PikPak | rclone 原生 `pikpak` 后端 | 账号 + 密码直连，不打开浏览器；需 rclone v1.63 及以上 |
+| 坚果云 (Nutstore) | WebDAV | 地址固定 `https://dav.jianguoyun.com/dav/`，密码须使用「应用密码」 |
+| 123 云盘 | 官方 WebDAV（VIP / SVIP） | 地址固定 `https://webdav.123pan.cn/webdav`，须在「工具中心 ➔ 第三方挂载」生成应用密码 |
+| 百度网盘 / 阿里云盘 / 夸克网盘 / 115 网盘 / 天翼云盘 / 迅雷云盘 | OpenList / AList WebDAV | 先在 OpenList 中添加网盘并开启 WebDAV，再在软件中选择「OpenList / AList 聚合」 |
+
+> 说明：百度网盘、阿里云盘、夸克网盘等私有协议未被官方 rclone 收录，本项目不内置、不分发任何第三方二进制。若希望原生直连，可将 rclone 路径指向自行信任的社区分支，其新增后端会自动出现在「更多 Rclone 原版存储提供商」列表中，也可配合「原版终端向导」完成配置。
+
+### OpenList / AList 配置步骤
+
+1. 部署并启动 [OpenList](https://github.com/OpenListTeam/OpenList)（或 AList）。
+2. 打开 OpenList 管理后台，在「存储」中添加百度网盘、阿里云盘、夸克网盘、115 等账号，并确认可正常浏览文件。
+3. 在「设置 ➔ 全局 ➔ WebDAV」中确认已开启（默认地址为 `http://<主机>:5244/dav`）。
+4. 回到本软件：「添加云端硬盘 ➔ 中国大陆常用网盘 ➔ OpenList / AList 聚合」，填写 WebDAV 地址、OpenList 用户名与密码，即可挂载为本地盘符。
 
 ---
 
@@ -127,3 +161,6 @@ npm run tauri build
 ## 📄 开源授权
 
 本项目基于 [MIT License](LICENSE) 开源。
+
+- **原始项目**：[alan0830/rclone-drive](https://github.com/alan0830/rclone-drive)，作者 [@alan0830](https://github.com/alan0830)，原始代码与设计的版权归原作者所有。
+- **本仓库**：[Alia2006/rclone-drive](https://github.com/Alia2006/rclone-drive)，为上述项目的衍生维护版本，在此基础之上进行修改与功能增强，并同样以 MIT 许可协议开源。

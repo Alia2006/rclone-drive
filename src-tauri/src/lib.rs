@@ -35,6 +35,7 @@ pub struct RemoteInfo {
     pub remote_type: String,
     pub is_mounted: bool,
     pub mounted_drive: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +154,8 @@ fn get_icon_filename_for_type(remote_type: &str) -> &'static str {
         "s3.ico"
     } else if t.contains("ftp") || t.contains("sftp") {
         "ftp.ico"
+    } else if t.contains("pikpak") {
+        "default_cloud.ico"
     } else {
         "default_cloud.ico"
     }
@@ -577,6 +580,7 @@ fn get_remotes(
                 remote_type: r_type,
                 is_mounted,
                 mounted_drive,
+                description: val.get("description").and_then(|d| d.as_str()).map(|s| s.to_string()),
             });
         }
     }
@@ -715,6 +719,7 @@ fn mount_remote(
     read_only: Option<bool>,
     remote_type: Option<String>,
     mount_options: Option<MountPerformanceOptions>,
+    remote_path: Option<String>,
 ) -> Result<MountInstance, String> {
     let exe = resolve_rclone_path(rclone_path);
 
@@ -742,7 +747,24 @@ fn mount_remote(
 
     let mut cmd = Command::new(&exe);
     cmd.arg("mount");
-    cmd.arg(format!("{}:", remote));
+    // Optional remote sub-path (e.g. "/data" for FTP/SFTP); always treated as an absolute
+    // path on the server. Left empty, rclone falls back to the backend default (user home).
+    let source_spec = {
+        let raw = remote_path.unwrap_or_default();
+        let cleaned = raw
+            .replace('\\', "/")
+            .replace('\r', "")
+            .replace('\n', "")
+            .trim()
+            .trim_matches('/')
+            .to_string();
+        if cleaned.is_empty() || cleaned.contains(':') {
+            format!("{}:", remote)
+        } else {
+            format!("{}:/{}", remote, cleaned)
+        }
+    };
+    cmd.arg(source_spec);
     cmd.arg(format!("{}:", clean_letter));
     cmd.arg("--vfs-cache-mode");
     cmd.arg(&effective_cache_mode);
@@ -937,9 +959,26 @@ async fn create_remote_gui(
     name: String,
     remote_type: String,
     params: HashMap<String, String>,
+    non_interactive: Option<bool>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let exe = resolve_rclone_path(rclone_path);
+
+        // 预检查远程是否已存在（若预检查失败则视为已存在，避免误删原有配置）
+        let mut existed = true;
+        {
+            let mut dump_cmd = Command::new(&exe);
+            dump_cmd.args(["config", "dump"]);
+            dump_cmd.creation_flags(CREATE_NO_WINDOW);
+            if let Ok(dump_out) = dump_cmd.output() {
+                if dump_out.status.success() {
+                    if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&dump_out.stdout) {
+                        existed = json.get(&name).is_some();
+                    }
+                }
+            }
+        }
+
         let mut cmd = Command::new(&exe);
         cmd.arg("config");
         cmd.arg("create");
@@ -954,8 +993,12 @@ async fn create_remote_gui(
         }
 
         let is_onedrive = remote_type.to_lowercase().contains("onedrive");
+        let use_non_interactive = non_interactive == Some(true);
         if is_onedrive {
             cmd.stdin(Stdio::piped());
+        } else if use_non_interactive {
+            cmd.arg("--non-interactive");
+            cmd.stdin(Stdio::null());
         }
 
         cmd.creation_flags(CREATE_NO_WINDOW);
@@ -975,8 +1018,19 @@ async fn create_remote_gui(
             }
             Ok(format!("成功创建远程 '{}'！", name))
         } else {
-            let err = String::from_utf8_lossy(&output.stderr);
-            Err(format!("创建失败: {}", err))
+            let err = String::from_utf8_lossy(&output.stderr).to_string();
+            // 创建失败时清理半成品配置（原本已存在的远程不动）
+            if !existed {
+                let mut del_cmd = Command::new(&exe);
+                del_cmd.args(["config", "delete", &name]);
+                del_cmd.creation_flags(CREATE_NO_WINDOW);
+                let _ = del_cmd.output();
+            }
+            if err.contains("couldn't find backend for type") {
+                Err(format!("当前 rclone 版本不支持该网盘类型 '{}'。请升级 rclone 到最新版（https://rclone.org/downloads/），或改用「原版终端向导」配置。", remote_type))
+            } else {
+                Err(format!("创建失败: {}", err))
+            }
         }
     })
     .await

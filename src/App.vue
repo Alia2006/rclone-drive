@@ -234,6 +234,15 @@ const STORAGE_CATEGORIES = [
     ]
   },
   {
+    category: "中国大陆常用网盘",
+    items: [
+      { type: "pikpak", name: "PikPak 网盘 (原生直连 · 账号密码)", auth: "credentials", hint: "rclone 原生支持，无需浏览器授权；中国大陆常用的离线下载网盘" },
+      { type: "nutstore", name: "坚果云 (Nutstore WebDAV · 应用密码)", auth: "webdav", hint: "使用坚果云应用密码通过 WebDAV 直连，无需额外服务" },
+      { type: "pan123", name: "123 云盘 (官方 WebDAV · 需会员)", auth: "webdav", hint: "使用「应用密码」通过官方 WebDAV 直连（VIP / SVIP 功能）" },
+      { type: "openlist", name: "OpenList / AList 聚合 (百度网盘、阿里云盘、夸克、115、123、天翼、迅雷...)", auth: "webdav", hint: "先部署 OpenList/AList 并添加网盘，再通过其 WebDAV 接口统一挂载" }
+    ]
+  },
+  {
     category: "对象存储 (S3 & Cloud Storage)",
     items: [
       { type: "s3", name: "Amazon S3 或兼容对象存储 (Cloudflare R2, MinIO, Wasabi...)", auth: "s3", hint: "Access Key / Secret Key 密钥认证 (免浏览器)" },
@@ -266,6 +275,46 @@ function isOAuthType(type = "") {
   return ["drive", "onedrive", "dropbox", "box", "pcloud", "yandex"].includes(t);
 }
 
+// ==========================================
+// 中国大陆常用网盘 (PikPak 原生 + 坚果云 / OpenList WebDAV 预设)
+// ==========================================
+const CHINA_NETDISK_TYPES = ["pikpak", "nutstore", "pan123", "openlist"];
+
+// 预设类型 -> rclone 实际 backend 类型
+function resolveRcloneBackendType(type = "") {
+  if (type === "nutstore" || type === "pan123" || type === "openlist") return "webdav";
+  return type;
+}
+
+function isChinaNetdiskType(type = "") {
+  return CHINA_NETDISK_TYPES.includes(type);
+}
+
+// 补全协议头；若只填了主机与端口，自动补上 OpenList 默认的 /dav 路径
+function normalizeWebdavUrl(raw = "") {
+  let u = (raw || "").trim();
+  if (!u) return "";
+  if (!/^https?:\/\//i.test(u)) u = `http://${u}`;
+  try {
+    const parsed = new URL(u);
+    if (!parsed.pathname || parsed.pathname === "/") {
+      parsed.pathname = "/dav";
+    }
+    return parsed.toString();
+  } catch (_) {
+    return u;
+  }
+}
+
+// 大陆网盘的中文标签，写入 rclone description，用于列表徽标识别
+function chinaNetdiskLabel(type = "") {
+  if (type === "pikpak") return "PikPak 网盘";
+  if (type === "nutstore") return "坚果云 WebDAV";
+  if (type === "pan123") return "123 云盘 WebDAV";
+  if (type === "openlist") return "OpenList/AList 聚合";
+  return "";
+}
+
 // Add Remote Modal State
 const newRemoteForm = reactive({
   name: "",
@@ -291,6 +340,7 @@ const newRemoteForm = reactive({
   account: "",
   key: "",
   searchProvider: "",
+  remotePath: "",
   isCreating: false
 });
 
@@ -319,6 +369,8 @@ const editRemoteForm = reactive({
   // Other storage
   account: "",
   key: "",
+  remotePath: "",
+  description: "",
   isSaving: false,
   isReconnecting: false
 });
@@ -440,7 +492,7 @@ let schedulerTimer = null;
 
 // GitHub Auto-Update State & Settings
 const CURRENT_VERSION = "1.6.5";
-const GITHUB_REPO = "alan0830/rclone-drive";
+const GITHUB_REPO = "Alia2006/rclone-drive";
 
 const savedUpdateSettings = JSON.parse(localStorage.getItem("rclone_update_settings") || "{}");
 const updateSettings = reactive({
@@ -599,8 +651,17 @@ async function openUrl(url) {
 }
 
 // Provider details helper
-function getProviderDetails(type = "") {
+function getProviderDetails(type = "", description = "") {
   const t = (type || "").toLowerCase();
+  const d = (description || "").toLowerCase();
+  // 大陆网盘通过 description 标记识别（底层多为 webdav）
+  if (d.includes("坚果云") || d.includes("nutstore")) return { name: "坚果云 (WebDAV)", color: "#00B96B", bg: "rgba(0, 185, 107, 0.15)" };
+  if (d.includes("123云盘") || d.includes("123 云盘") || d.includes("123pan")) return { name: "123 云盘 (WebDAV)", color: "#2F6BFF", bg: "rgba(47, 107, 255, 0.15)" };
+  if (d.includes("openlist") || d.includes("alist")) return { name: "OpenList / AList 聚合", color: "#6366F1", bg: "rgba(99, 102, 241, 0.15)" };
+  if (t.includes("pikpak")) return { name: "PikPak 网盘", color: "#00A3FF", bg: "rgba(0, 163, 255, 0.15)" };
+  if (t.includes("nutstore") || t.includes("jianguoyun")) return { name: "坚果云 (WebDAV)", color: "#00B96B", bg: "rgba(0, 185, 107, 0.15)" };
+  if (t.includes("pan123") || t.includes("123pan")) return { name: "123 云盘 (WebDAV)", color: "#2F6BFF", bg: "rgba(47, 107, 255, 0.15)" };
+  if (t.includes("openlist") || t.includes("alist")) return { name: "OpenList / AList 聚合", color: "#6366F1", bg: "rgba(99, 102, 241, 0.15)" };
   if (t.includes("onedrive")) return { name: "Microsoft OneDrive", color: "#0078D4", bg: "rgba(0, 120, 212, 0.15)" };
   if (t.includes("drive") && !t.includes("onedrive") && !t.includes("proton") && !t.includes("huawei")) return { name: "Google Drive", color: "#4285F4", bg: "rgba(66, 133, 244, 0.15)" };
   if (t.includes("photo")) return { name: "Google Photos", color: "#EA4335", bg: "rgba(234, 67, 53, 0.15)" };
@@ -807,7 +868,8 @@ async function refreshAll(isInitial = false) {
           readOnly: false,
           autoMount: autoMountList.value.includes(r.name),
           mountPreset: defPreset,
-          mountOptions: getDefaultMountOptions(defPreset)
+          mountOptions: getDefaultMountOptions(defPreset),
+          remotePath: ""
         };
       } else {
         // 已有保存的用户自定义设置，绝对保留用户的 driveLetter！
@@ -873,7 +935,8 @@ async function mountDrive(remoteName, notify = true) {
       cacheMode: conf.cacheMode || "full",
       readOnly: conf.readOnly || false,
       remoteType: remoteType,
-      mountOptions: activeOpts
+      mountOptions: activeOpts,
+      remotePath: (conf.remotePath || "").trim()
     });
 
     if (notify) {
@@ -963,11 +1026,55 @@ async function submitAddRemote() {
     showToast("云端硬盘名称不可包含特殊字符 (: / \\ [ ] * ? < > | \")", "error");
     return;
   }
+  if (newRemoteForm.type === "openlist" && !(newRemoteForm.url || "").trim()) {
+    showToast("请填写 OpenList / AList 的 WebDAV 地址，例如 http://192.168.1.10:5244/dav", "error");
+    return;
+  }
+  if (isChinaNetdiskType(newRemoteForm.type)) {
+    if (!(newRemoteForm.user || "").trim()) {
+      showToast(newRemoteForm.type === "openlist" ? "请填写 OpenList / AList 的登录账号！" : "请填写网盘账号！", "error");
+      return;
+    }
+    if (!(newRemoteForm.pass || "").trim()) {
+      if (newRemoteForm.type === "nutstore") {
+        showToast("请填写坚果云「应用密码」（非网页登录密码）！", "error");
+      } else if (newRemoteForm.type === "pan123") {
+        showToast("请填写 123 云盘「应用密码」（非网页登录密码）！", "error");
+      } else {
+        showToast("请填写网盘密码！", "error");
+      }
+      return;
+    }
+  }
 
   newRemoteForm.isCreating = true;
   const params = {};
 
-  if (isOAuthType(newRemoteForm.type)) {
+  if (newRemoteForm.type === "pikpak") {
+    params.user = newRemoteForm.user.trim();
+    params.pass = newRemoteForm.pass;
+    params.description = chinaNetdiskLabel("pikpak");
+  } else if (newRemoteForm.type === "nutstore") {
+    // 坚果云 WebDAV 地址固定，密码须使用「应用密码」
+    params.url = "https://dav.jianguoyun.com/dav/";
+    params.vendor = "other";
+    params.user = newRemoteForm.user.trim();
+    params.pass = newRemoteForm.pass;
+    params.description = chinaNetdiskLabel("nutstore");
+  } else if (newRemoteForm.type === "pan123") {
+    // 123 云盘官方 WebDAV（VIP/SVIP），密码须使用「应用密码」
+    params.url = "https://webdav.123pan.cn/webdav";
+    params.vendor = "other";
+    params.user = newRemoteForm.user.trim();
+    params.pass = newRemoteForm.pass;
+    params.description = chinaNetdiskLabel("pan123");
+  } else if (newRemoteForm.type === "openlist") {
+    params.url = normalizeWebdavUrl(newRemoteForm.url);
+    params.vendor = "other";
+    params.user = newRemoteForm.user.trim();
+    params.pass = newRemoteForm.pass;
+    params.description = chinaNetdiskLabel("openlist");
+  } else if (isOAuthType(newRemoteForm.type)) {
     if (newRemoteForm.clientId.trim()) params.client_id = newRemoteForm.clientId.trim();
     if (newRemoteForm.clientSecret.trim()) params.client_secret = newRemoteForm.clientSecret.trim();
   } else if (newRemoteForm.type === "s3") {
@@ -1014,15 +1121,19 @@ async function submitAddRemote() {
   }
 
   try {
+    const backendType = resolveRcloneBackendType(newRemoteForm.type);
     const msg = await invoke("create_remote_gui", {
       rclonePath: customRclonePath.value.trim() || null,
       name: nameTrimmed,
-      remoteType: newRemoteForm.type,
-      params
+      remoteType: backendType,
+      params,
+      nonInteractive: isChinaNetdiskType(newRemoteForm.type)
     });
 
     showToast(msg || "远程创建成功！", "success");
     showAddRemoteModal.value = false;
+    const savedType = newRemoteForm.type;
+    const savedPath = (newRemoteForm.remotePath || "").trim();
     newRemoteForm.name = "";
     newRemoteForm.url = "";
     newRemoteForm.user = "";
@@ -1036,7 +1147,13 @@ async function submitAddRemote() {
     newRemoteForm.account = "";
     newRemoteForm.key = "";
     newRemoteForm.domain = "";
+    newRemoteForm.remotePath = "";
     await refreshAll();
+    if ((savedType === "ftp" || savedType === "sftp") && savedPath) {
+      if (!remoteConfigs[nameTrimmed]) remoteConfigs[nameTrimmed] = {};
+      remoteConfigs[nameTrimmed].remotePath = savedPath;
+      saveRemoteConfigs();
+    }
   } catch (err) {
     showToast(`创建失败: ${err}`, "error");
   } finally {
@@ -1049,6 +1166,7 @@ async function openEditModal(remote) {
   editRemoteForm.name = remote.name;
   editRemoteForm.newName = remote.name;
   editRemoteForm.type = remote.remote_type;
+  editRemoteForm.description = remote.description || "";
   editRemoteForm.url = "";
   editRemoteForm.user = "";
   editRemoteForm.pass = "";
@@ -1069,6 +1187,8 @@ async function openEditModal(remote) {
   // Others
   editRemoteForm.account = "";
   editRemoteForm.key = "";
+  // 远程访问目录保存在本地 localStorage（remoteConfigs），不在 rclone.conf 中
+  editRemoteForm.remotePath = remoteConfigs[remote.name]?.remotePath || "";
 
   try {
     const details = await invoke("get_remote_detail", {
@@ -1126,6 +1246,9 @@ async function submitEditRemote() {
     if (editRemoteForm.s3Endpoint) params.endpoint = editRemoteForm.s3Endpoint.trim();
     params.force_path_style = editRemoteForm.s3ForcePathStyle ? "true" : "false";
     params.env_auth = editRemoteForm.s3EnvAuth ? "true" : "false";
+  } else if (editRemoteForm.type === "pikpak") {
+    if ((editRemoteForm.user || "").trim()) params.user = editRemoteForm.user.trim();
+    if (editRemoteForm.pass) params.pass = editRemoteForm.pass;
   } else if (editRemoteForm.type === "webdav") {
     if (editRemoteForm.url) params.url = editRemoteForm.url;
     if (editRemoteForm.user) params.user = editRemoteForm.user;
@@ -1186,6 +1309,13 @@ async function submitEditRemote() {
       if (changedTasks) {
         localStorage.setItem("rclone_scheduled_tasks", JSON.stringify(scheduledTasks.value));
       }
+    }
+
+    // 本地保存 FTP/SFTP 的访问目录（远程路径），不写入 rclone.conf
+    if (editRemoteForm.type === "ftp" || editRemoteForm.type === "sftp") {
+      if (!remoteConfigs[trimmedNewName]) remoteConfigs[trimmedNewName] = {};
+      remoteConfigs[trimmedNewName].remotePath = (editRemoteForm.remotePath || "").trim();
+      saveRemoteConfigs();
     }
 
     showToast(msg || "设置更新成功！", "success");
@@ -2119,14 +2249,14 @@ onUnmounted(() => {
           >
             <!-- Card Header -->
             <div class="card-header">
-              <div class="provider-badge" :style="{ backgroundColor: getProviderDetails(remote.remote_type).bg }">
-                <Cloud class="provider-icon" :style="{ color: getProviderDetails(remote.remote_type).color }" />
+              <div class="provider-badge" :style="{ backgroundColor: getProviderDetails(remote.remote_type, remote.description).bg }">
+                <Cloud class="provider-icon" :style="{ color: getProviderDetails(remote.remote_type, remote.description).color }" />
               </div>
 
               <div class="remote-meta">
                 <div class="remote-name" :title="remote.name">{{ remote.name }}</div>
                 <div class="remote-type-tag">
-                  {{ getProviderDetails(remote.remote_type).name }}
+                  {{ getProviderDetails(remote.remote_type, remote.description).name }}
                 </div>
               </div>
 
@@ -3282,7 +3412,7 @@ onUnmounted(() => {
           <div class="setting-group">
             <div class="flex-between mb-1">
               <label class="group-title">云端服务类型 (Storage Provider)</label>
-              <span class="text-xs text-muted">原版支持 60+ 种云端服务</span>
+              <span class="text-xs text-muted">内置 60+ 种云端服务，并提供大陆网盘预设</span>
             </div>
             <!-- Provider Filter / Search -->
             <div class="search-input-wrapper mb-2">
@@ -3291,7 +3421,7 @@ onUnmounted(() => {
                 type="text"
                 v-model="newRemoteForm.searchProvider"
                 class="modal-input search-input"
-                placeholder="快速过滤云端服务（例如：s3, drive, webdav, smb, b2...）"
+                placeholder="快速过滤云端服务（例如：百度, 阿里云盘, 115, pikpak, s3, drive...）"
               />
               <button
                 v-if="newRemoteForm.searchProvider"
@@ -3467,6 +3597,121 @@ onUnmounted(() => {
             </div>
           </template>
 
+          <!-- 中国大陆网盘：PikPak (rclone 原生 backend) -->
+          <template v-if="newRemoteForm.type === 'pikpak'">
+            <div class="info-box">
+              <div class="info-title">
+                <Info class="info-icon text-cyan" />
+                <span class="text-cyan font-bold">PikPak 原生直连（账号密码）</span>
+              </div>
+              <p class="group-desc">
+                由 rclone 原生 PikPak 后端直连，<b>不会打开浏览器</b>。请填写注册邮箱 / 手机号与密码；如账号开启了额外验证，请先在 PikPak 官网确认可正常登录。<br />
+                该后端自 rclone v1.63 起提供，版本过旧时请先升级 rclone。
+              </p>
+            </div>
+            <div class="grid-2-col">
+              <div class="setting-group">
+                <label class="group-title">账号 (邮箱 / 手机号)</label>
+                <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="your-account@example.com" />
+              </div>
+              <div class="setting-group">
+                <label class="group-title">密码</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="PikPak 登录密码" />
+              </div>
+            </div>
+          </template>
+
+          <!-- 坚果云 WebDAV -->
+          <template v-if="newRemoteForm.type === 'nutstore'">
+            <div class="info-box">
+              <div class="info-title">
+                <Info class="info-icon text-cyan" />
+                <span class="text-cyan font-bold">坚果云 WebDAV（应用密码）</span>
+              </div>
+              <p class="group-desc">
+                服务器地址固定为 <code>https://dav.jianguoyun.com/dav/</code>，直接使用坚果云 WebDAV 接口，无需额外部署。<br />
+                获取密码：登录坚果云网页版 ➔ 右上角账户 ➔「安全选项」➔「添加应用」➔ 生成<b>应用密码</b>（网页登录密码不可用于 WebDAV）。
+              </p>
+            </div>
+            <div class="setting-group">
+              <label class="group-title">服务器地址 (固定)</label>
+              <input type="text" class="modal-input font-mono" value="https://dav.jianguoyun.com/dav/" disabled />
+            </div>
+            <div class="grid-2-col">
+              <div class="setting-group">
+                <label class="group-title">坚果云账号 (邮箱)</label>
+                <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="your-account@example.com" />
+              </div>
+              <div class="setting-group">
+                <label class="group-title">应用密码</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="在坚果云「安全选项」中生成" />
+              </div>
+            </div>
+          </template>
+
+          <!-- 123 云盘官方 WebDAV -->
+          <template v-if="newRemoteForm.type === 'pan123'">
+            <div class="info-box">
+              <div class="info-title">
+                <Info class="info-icon text-cyan" />
+                <span class="text-cyan font-bold">123 云盘官方 WebDAV（会员功能）</span>
+              </div>
+              <p class="group-desc">
+                服务器地址固定为 <code>https://webdav.123pan.cn/webdav</code>。WebDAV 属于 123 云盘 VIP / SVIP 会员权益，请先在会员中心确认已开通。<br />
+                获取密码：登录 123 云盘网页版 ➔ 工具中心 ➔「第三方挂载」➔ 添加应用 ➔ 生成 8 位<b>应用密码</b>（可限定目录与读写权限，登录密码不可用）。
+              </p>
+            </div>
+            <div class="setting-group">
+              <label class="group-title">服务器地址 (固定)</label>
+              <input type="text" class="modal-input font-mono" value="https://webdav.123pan.cn/webdav" disabled />
+            </div>
+            <div class="grid-2-col">
+              <div class="setting-group">
+                <label class="group-title">123 云盘账号 (手机号 / 邮箱)</label>
+                <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="13800000000" />
+              </div>
+              <div class="setting-group">
+                <label class="group-title">应用密码</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="8 位应用密码" />
+              </div>
+            </div>
+          </template>
+
+          <!-- OpenList / AList 聚合 WebDAV -->
+          <template v-if="newRemoteForm.type === 'openlist'">
+            <div class="info-box">
+              <div class="info-title">
+                <Info class="info-icon text-amber" />
+                <span class="font-bold text-amber">通过 OpenList / AList 挂载百度网盘、阿里云盘、夸克、115 等</span>
+              </div>
+              <p class="group-desc">
+                官方 rclone 未内置百度网盘、阿里云盘、夸克网盘、115、123 云盘、天翼云盘、迅雷云盘的私有协议，本项目统一通过
+                <b>OpenList / AList 的 WebDAV 接口</b>挂载，可同时聚合多个网盘。<br />
+                <b>使用步骤：</b>① 部署并启动 OpenList（或 AList）；② 在 OpenList 后台「存储」中添加对应网盘账号；③ 在 OpenList 后台开启
+                WebDAV（默认路径 <code>/dav</code>，端口 <code>5244</code>）；④ 回到此处填写 WebDAV 地址与 OpenList 账号密码即可挂载。
+              </p>
+              <p class="group-desc">
+                OpenList 项目：
+                <a href="#" @click.prevent="openUrl('https://github.com/OpenListTeam/OpenList')" class="text-cyan">github.com/OpenListTeam/OpenList</a>
+              </p>
+            </div>
+            <div class="setting-group">
+              <label class="group-title">OpenList WebDAV 地址</label>
+              <input type="text" v-model="newRemoteForm.url" class="modal-input font-mono" placeholder="http://192.168.1.10:5244/dav" />
+              <span class="field-hint">须包含 /dav 路径；局域网可用 http，公网访问建议使用 https 域名。</span>
+            </div>
+            <div class="grid-2-col">
+              <div class="setting-group">
+                <label class="group-title">OpenList 用户名</label>
+                <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="admin" />
+              </div>
+              <div class="setting-group">
+                <label class="group-title">OpenList 密码</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="OpenList 登录密码" />
+              </div>
+            </div>
+          </template>
+
           <!-- SMB / Windows Shared Folder Inputs -->
           <template v-if="newRemoteForm.type === 'smb'">
             <div class="grid-2-col">
@@ -3516,6 +3761,11 @@ onUnmounted(() => {
                 <label class="group-title">密码</label>
                 <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="Password" />
               </div>
+            </div>
+            <div class="setting-group">
+              <label class="group-title">访问目录 (远程路径，选填)</label>
+              <input type="text" v-model="newRemoteForm.remotePath" class="modal-input" placeholder="例如：/data（服务器绝对路径；留空则使用默认目录 /root）" />
+              <p class="group-desc">填写服务器上的绝对路径，将直接挂载该目录（如 /data 对应服务器 /data，而非 /root/data）</p>
             </div>
           </template>
 
@@ -3602,7 +3852,7 @@ onUnmounted(() => {
 
           <div class="setting-group">
             <label class="group-title">服务类型</label>
-            <div class="text-cyan font-bold">{{ getProviderDetails(editRemoteForm.type).name }} ({{ editRemoteForm.type }})</div>
+            <div class="text-cyan font-bold">{{ getProviderDetails(editRemoteForm.type, editRemoteForm.description).name }} ({{ editRemoteForm.type }})</div>
           </div>
 
           <!-- OAuth Re-authenticate for Drive / OneDrive -->
@@ -3702,6 +3952,19 @@ onUnmounted(() => {
             </div>
           </template>
 
+          <!-- PikPak Edit -->
+          <template v-if="editRemoteForm.type === 'pikpak'">
+            <div class="setting-group">
+              <label class="group-title">账号 (邮箱 / 手机号)</label>
+              <input type="text" v-model="editRemoteForm.user" class="modal-input" />
+            </div>
+            <div class="setting-group">
+              <label class="group-title">新密码 (若不修改请留空)</label>
+              <input type="password" v-model="editRemoteForm.pass" class="modal-input" placeholder="留空代表不变更密码" />
+            </div>
+            <p class="group-desc">修改账号或密码后，rclone 会重新登录验证一次 PikPak 账号。</p>
+          </template>
+
           <!-- SMB Edit -->
           <template v-if="editRemoteForm.type === 'smb'">
             <div class="grid-2-col">
@@ -3747,6 +4010,11 @@ onUnmounted(() => {
             <div class="setting-group">
               <label class="group-title">新密码 (若不修改请留空)</label>
               <input type="password" v-model="editRemoteForm.pass" class="modal-input" placeholder="留空代表不变更密码" />
+            </div>
+            <div class="setting-group">
+              <label class="group-title">访问目录 (远程路径，选填)</label>
+              <input type="text" v-model="editRemoteForm.remotePath" class="modal-input" placeholder="例如：/data（服务器绝对路径；留空则使用默认目录 /root）" />
+              <p class="group-desc">填写服务器上的绝对路径，将直接挂载该目录（如 /data 对应服务器 /data，而非 /root/data）</p>
             </div>
           </template>
 
