@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Rclone Drive - 云端硬盘挂载器",
+        "title": "Rclone Drive",
         "width": 1080,
         "height": 780,
         "minWidth": 880,
@@ -38,7 +38,9 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "template": "windows/installer.nsi"
+        "template": "windows/installer.nsi",
+        "languages": ["SimpChinese", "TradChinese", "English"],
+        "displayLanguageSelector": true
       }
     }
   }

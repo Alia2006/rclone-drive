@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { enable, isEnabled, disable } from "@tauri-apps/plugin-autostart";
 import {
@@ -58,6 +58,16 @@ import {
   Gauge,
   Flame
 } from "lucide-vue-next";
+import { useI18n } from "vue-i18n";
+import { LANGUAGES, normalizeLocale, setLocale } from "./i18n";
+
+const { t, locale } = useI18n();
+const languages = LANGUAGES;
+
+// 日期/时间本地化：将界面语言映射为 Intl 支持的 locale（en → en-US）
+function dateLocale() {
+  return locale.value === "en" ? "en-US" : locale.value;
+}
 
 // Theme State (Dark / Light)
 const isLightMode = ref(localStorage.getItem("rclone_theme") === "light");
@@ -74,7 +84,23 @@ function toggleTheme() {
   isLightMode.value = !isLightMode.value;
   localStorage.setItem("rclone_theme", isLightMode.value ? "light" : "dark");
   applyTheme(isLightMode.value);
-  showToast(isLightMode.value ? "已切换为浅色主题 ☀️" : "已切换为深色主题 🌙", "info");
+  showToast(isLightMode.value ? t("msg.theme.light") : t("msg.theme.dark"), "info");
+}
+
+async function changeLanguage(code) {
+  const next = setLocale(code);
+  localStorage.setItem("rclone_language", next);
+  try {
+    await invoke("save_app_settings", {
+      settings: {
+        start_minimized_to_tray: startMinimizedActive.value,
+        language: next,
+      },
+    });
+    showToast(t("settings.languageSaved"), "success");
+  } catch (err) {
+    showToast(String(err), "error");
+  }
 }
 
 // Active Tab
@@ -115,7 +141,8 @@ const globalMountPreset = ref(localStorage.getItem("rclone_global_mount_preset")
 function saveGlobalMountPreset(preset) {
   globalMountPreset.value = preset;
   localStorage.setItem("rclone_global_mount_preset", preset);
-  showToast(`已更新全局默认挂载策略为: ${preset === 'fast' ? '⚡ 极速推荐' : preset === 'default' ? '⚖️ 官方默认' : '🛠️ 自定义高级'}`, "info");
+  const presetName = preset === 'fast' ? t('msg.preset.fast') : preset === 'default' ? t('msg.preset.default') : t('msg.preset.custom');
+  showToast(t("msg.preset.updated", { name: presetName }), "info");
 }
 
 function toggleAdvancedOpts(name) {
@@ -206,66 +233,71 @@ const autoMountList = ref(JSON.parse(localStorage.getItem("rclone_auto_mount_lis
 const supportedProviders = ref([]);
 
 const S3_PROVIDERS = [
-  { value: "AWS", label: "Amazon Web Services (AWS S3 官方)", defaultRegion: "us-east-1", defaultEndpoint: "", hint: "官方 S3 端点可留空" },
-  { value: "Cloudflare", label: "Cloudflare R2", defaultRegion: "auto", defaultEndpoint: "", hint: "例如 https://<ACCOUNT_ID>.r2.cloudflarestorage.com" },
-  { value: "Minio", label: "MinIO 自建对象存储", defaultRegion: "", defaultEndpoint: "http://127.0.0.1:9000", forcePathStyle: true, hint: "一般需启用路径样式 (Force Path Style)" },
-  { value: "Wasabi", label: "Wasabi Cloud Storage", defaultRegion: "us-east-1", defaultEndpoint: "", hint: "支持 Wasabi 各区域" },
-  { value: "Backblaze", label: "Backblaze B2 (兼容 S3 API)", defaultRegion: "us-west-004", defaultEndpoint: "s3.us-west-004.backblazeb2.com", hint: "使用 Backblaze B2 的 S3 兼容端点" },
-  { value: "Alibaba", label: "阿里云 OSS (S3 兼容)", defaultRegion: "oss-cn-hangzhou", defaultEndpoint: "oss-cn-hangzhou.aliyuncs.com", hint: "使用阿里云 OSS 端点" },
-  { value: "TencentCOS", label: "腾讯云 COS (S3 兼容)", defaultRegion: "ap-guangzhou", defaultEndpoint: "cos.ap-guangzhou.myqcloud.com", hint: "使用腾讯云 COS 端点" },
-  { value: "DigitalOcean", label: "DigitalOcean Spaces", defaultRegion: "nyc3", defaultEndpoint: "nyc3.digitaloceanspaces.com", hint: "例如 nyc3.digitaloceanspaces.com" },
-  { value: "Ceph", label: "Ceph Object Storage", defaultRegion: "", defaultEndpoint: "", hint: "Ceph 自建对象存储" },
-  { value: "Other", label: "其他自定义兼容 S3 (兼容 MinIO/S3 协议)", defaultRegion: "", defaultEndpoint: "", hint: "兼容 AWS S3 规范的各类存储" }
+  { value: "AWS", labelKey: "provider.s3.aws.label", defaultRegion: "us-east-1", defaultEndpoint: "", hintKey: "provider.s3.aws.hint" },
+  { value: "Cloudflare", labelKey: "provider.s3.cloudflare.label", defaultRegion: "auto", defaultEndpoint: "", hintKey: "provider.s3.cloudflare.hint" },
+  { value: "Minio", labelKey: "provider.s3.minio.label", defaultRegion: "", defaultEndpoint: "http://127.0.0.1:9000", forcePathStyle: true, hintKey: "provider.s3.minio.hint" },
+  { value: "Wasabi", labelKey: "provider.s3.wasabi.label", defaultRegion: "us-east-1", defaultEndpoint: "", hintKey: "provider.s3.wasabi.hint" },
+  { value: "Backblaze", labelKey: "provider.s3.backblaze.label", defaultRegion: "us-west-004", defaultEndpoint: "s3.us-west-004.backblazeb2.com", hintKey: "provider.s3.backblaze.hint" },
+  { value: "Alibaba", labelKey: "provider.s3.alibaba.label", defaultRegion: "oss-cn-hangzhou", defaultEndpoint: "oss-cn-hangzhou.aliyuncs.com", hintKey: "provider.s3.alibaba.hint" },
+  { value: "TencentCOS", labelKey: "provider.s3.tencentcos.label", defaultRegion: "ap-guangzhou", defaultEndpoint: "cos.ap-guangzhou.myqcloud.com", hintKey: "provider.s3.tencentcos.hint" },
+  { value: "DigitalOcean", labelKey: "provider.s3.digitalocean.label", defaultRegion: "nyc3", defaultEndpoint: "nyc3.digitaloceanspaces.com", hintKey: "provider.s3.digitalocean.hint" },
+  { value: "Ceph", labelKey: "provider.s3.ceph.label", defaultRegion: "", defaultEndpoint: "", hintKey: "provider.s3.ceph.hint" },
+  { value: "Other", labelKey: "provider.s3.other.label", defaultRegion: "", defaultEndpoint: "", hintKey: "provider.s3.other.hint" }
 ];
 
 const STORAGE_CATEGORIES = [
   {
-    category: "常用个人与企业云端",
+    id: "personal",
+    labelKey: "provider.category.personal",
     items: [
-      { type: "drive", name: "Google Drive (个人 / 企业云端硬盘)", auth: "oauth", hint: "浏览器 OAuth 登录" },
-      { type: "onedrive", name: "Microsoft OneDrive (个人 / 商务版)", auth: "oauth", hint: "浏览器 OAuth 登录" },
-      { type: "dropbox", name: "Dropbox", auth: "oauth", hint: "浏览器 OAuth 登录" },
-      { type: "box", name: "Box", auth: "oauth", hint: "浏览器 OAuth 登录" },
-      { type: "pcloud", name: "pCloud", auth: "oauth", hint: "浏览器 OAuth 登录" },
-      { type: "mega", name: "Mega", auth: "credentials", hint: "账号密码登录" },
-      { type: "protondrive", name: "Proton Drive", auth: "credentials", hint: "账号密码登录" },
-      { type: "yandex", name: "Yandex Disk", auth: "oauth", hint: "浏览器 OAuth 登录" },
-      { type: "koofr", name: "Koofr", auth: "credentials", hint: "账号密码登录" }
+      { type: "drive", nameKey: "provider.drive.name", auth: "oauth", hintKey: "provider.drive.hint" },
+      { type: "onedrive", nameKey: "provider.onedrive.name", auth: "oauth", hintKey: "provider.onedrive.hint" },
+      { type: "dropbox", nameKey: "provider.dropbox.name", auth: "oauth", hintKey: "provider.dropbox.hint" },
+      { type: "box", nameKey: "provider.box.name", auth: "oauth", hintKey: "provider.box.hint" },
+      { type: "pcloud", nameKey: "provider.pcloud.name", auth: "oauth", hintKey: "provider.pcloud.hint" },
+      { type: "mega", nameKey: "provider.mega.name", auth: "credentials", hintKey: "provider.mega.hint" },
+      { type: "protondrive", nameKey: "provider.protondrive.name", auth: "credentials", hintKey: "provider.protondrive.hint" },
+      { type: "yandex", nameKey: "provider.yandex.name", auth: "oauth", hintKey: "provider.yandex.hint" },
+      { type: "koofr", nameKey: "provider.koofr.name", auth: "credentials", hintKey: "provider.koofr.hint" }
     ]
   },
   {
-    category: "中国大陆常用网盘",
+    id: "cloud-cn",
+    labelKey: "provider.category.cloud-cn",
     items: [
-      { type: "pikpak", name: "PikPak 网盘 (原生直连 · 账号密码)", auth: "credentials", hint: "rclone 原生支持，无需浏览器授权；中国大陆常用的离线下载网盘" },
-      { type: "nutstore", name: "坚果云 (Nutstore WebDAV · 应用密码)", auth: "webdav", hint: "使用坚果云应用密码通过 WebDAV 直连，无需额外服务" },
-      { type: "pan123", name: "123 云盘 (官方 WebDAV · 需会员)", auth: "webdav", hint: "使用「应用密码」通过官方 WebDAV 直连（VIP / SVIP 功能）" },
-      { type: "openlist", name: "OpenList / AList 聚合 (百度网盘、阿里云盘、夸克、115、123、天翼、迅雷...)", auth: "webdav", hint: "先部署 OpenList/AList 并添加网盘，再通过其 WebDAV 接口统一挂载" }
+      { type: "pikpak", nameKey: "provider.pikpak.name", auth: "credentials", hintKey: "provider.pikpak.hint" },
+      { type: "nutstore", nameKey: "provider.nutstore.name", auth: "webdav", hintKey: "provider.nutstore.hint" },
+      { type: "pan123", nameKey: "provider.pan123.name", auth: "webdav", hintKey: "provider.pan123.hint" },
+      { type: "openlist", nameKey: "provider.openlist.name", auth: "webdav", hintKey: "provider.openlist.hint" }
     ]
   },
   {
-    category: "对象存储 (S3 & Cloud Storage)",
+    id: "object",
+    labelKey: "provider.category.object",
     items: [
-      { type: "s3", name: "Amazon S3 或兼容对象存储 (Cloudflare R2, MinIO, Wasabi...)", auth: "s3", hint: "Access Key / Secret Key 密钥认证 (免浏览器)" },
-      { type: "b2", name: "Backblaze B2 (原生 API)", auth: "b2", hint: "Account ID / Application Key" },
-      { type: "gcs", name: "Google Cloud Storage (GCS)", auth: "oauth", hint: "Google Cloud 对象存储" },
-      { type: "azureblob", name: "Microsoft Azure Blob 存储", auth: "azure", hint: "Storage Account / Key" }
+      { type: "s3", nameKey: "provider.s3.name", auth: "s3", hintKey: "provider.s3.hint" },
+      { type: "b2", nameKey: "provider.b2.name", auth: "b2", hintKey: "provider.b2.hint" },
+      { type: "gcs", nameKey: "provider.gcs.name", auth: "oauth", hintKey: "provider.gcs.hint" },
+      { type: "azureblob", nameKey: "provider.azureblob.name", auth: "azure", hintKey: "provider.azureblob.hint" }
     ]
   },
   {
-    category: "标准传输协议与网上邻居",
+    id: "protocol",
+    labelKey: "provider.category.protocol",
     items: [
-      { type: "webdav", name: "WebDAV (Nextcloud, ownCloud, Synology, 坚果云...)", auth: "webdav", hint: "URL 与账号密码" },
-      { type: "smb", name: "SMB / CIFS (Windows 网上邻居 / Samba)", auth: "smb", hint: "Host, 账号密码与 Domain" },
-      { type: "sftp", name: "SFTP / SSH 服务器", auth: "sftp", hint: "Host, Port 与账号密码/私钥" },
-      { type: "ftp", name: "FTP 服务器", auth: "ftp", hint: "Host, Port 与账号密码" }
+      { type: "webdav", nameKey: "provider.webdav.name", auth: "webdav", hintKey: "provider.webdav.hint" },
+      { type: "smb", nameKey: "provider.smb.name", auth: "smb", hintKey: "provider.smb.hint" },
+      { type: "sftp", nameKey: "provider.sftp.name", auth: "sftp", hintKey: "provider.sftp.hint" },
+      { type: "ftp", nameKey: "provider.ftp.name", auth: "ftp", hintKey: "provider.ftp.hint" }
     ]
   },
   {
-    category: "高级虚拟与本机存储",
+    id: "local",
+    labelKey: "provider.category.local",
     items: [
-      { type: "local", name: "本机路径 / 外置硬盘 (Local)", auth: "local", hint: "本机文件夹直接挂载为虚拟磁盘" },
-      { type: "crypt", name: "加密硬盘 (Crypt - 加密现有云端)", auth: "crypt", hint: "端对端加密透明保险箱" },
-      { type: "union", name: "联合磁盘 (Union - 合并多个硬盘空间)", auth: "union", hint: "多个远程聚合成单一盘符" }
+      { type: "local", nameKey: "provider.local.name", auth: "local", hintKey: "provider.local.hint" },
+      { type: "crypt", nameKey: "provider.crypt.name", auth: "crypt", hintKey: "provider.crypt.hint" },
+      { type: "union", nameKey: "provider.union.name", auth: "union", hintKey: "provider.union.hint" }
     ]
   }
 ];
@@ -402,26 +434,41 @@ async function handleOpenRcloneTerminal() {
     await invoke("open_rclone_config_terminal", {
       rclonePath: customRclonePath.value.trim() || null
     });
-    showToast("已在独立窗口启动 Rclone 原版交互设置向导！完成设置后请回此处点击刷新。", "info");
+    showToast(t("msg.terminal.opened"), "info");
   } catch (err) {
-    showToast(`启动原版设置终端失败: ${err}`, "error");
+    showToast(t("msg.terminal.openFailed", { error: err }), "error");
   }
 }
 
+// 本地化后的存储分类列表（搜索过滤需匹配当前语言显示文本）
+const localizedStorageCategories = computed(() =>
+  STORAGE_CATEGORIES.map((cat) => ({
+    id: cat.id,
+    label: t(cat.labelKey),
+    items: cat.items.map((it) => ({
+      ...it,
+      name: t(it.nameKey),
+      hint: t(it.hintKey)
+    }))
+  }))
+);
+
 const filteredStorageCategories = computed(() => {
   const kw = (newRemoteForm.searchProvider || "").trim().toLowerCase();
-  if (!kw) return STORAGE_CATEGORIES;
-  return STORAGE_CATEGORIES.map((cat) => {
-    return {
-      category: cat.category,
-      items: cat.items.filter(
-        (it) =>
-          it.name.toLowerCase().includes(kw) ||
-          it.type.toLowerCase().includes(kw) ||
-          (it.hint && it.hint.toLowerCase().includes(kw))
-      )
-    };
-  }).filter((cat) => cat.items.length > 0);
+  if (!kw) return localizedStorageCategories.value;
+  return localizedStorageCategories.value
+    .map((cat) => {
+      return {
+        ...cat,
+        items: cat.items.filter(
+          (it) =>
+            it.name.toLowerCase().includes(kw) ||
+            it.type.toLowerCase().includes(kw) ||
+            (it.hint && it.hint.toLowerCase().includes(kw))
+        )
+      };
+    })
+    .filter((cat) => cat.items.length > 0);
 });
 
 const allOtherRcloneProviders = computed(() => {
@@ -471,7 +518,30 @@ const cloudBrowseDirs = ref([]);
 const isLoadingCloudDirs = ref(false);
 
 // Scheduler State
-const scheduledTasks = ref(JSON.parse(localStorage.getItem("rclone_scheduled_tasks") || "[]"));
+// 旧版 localStorage 中 task.status 存的是中文值，这里迁移为 ASCII 枚举（源码用 \u 转义表示旧值）
+const LEGACY_TASK_STATUS = {
+  "\u5f85\u547d": "idle", // 待命
+  "\u8fd0\u884c\u4e2d...": "running", // 运行中...
+  "\u6210\u529f\u5b8c\u6210": "success", // 成功完成
+  "\u8fd0\u884c\u5931\u8d25": "failed" // 运行失败
+};
+const LEGACY_NEVER_RUN = "\u4ece\u672a\u8fd0\u884c"; // 从未运行
+
+function normalizeStoredTasks(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks.map((task) => {
+    const migrated = { ...task };
+    if (migrated.status && LEGACY_TASK_STATUS[migrated.status]) {
+      migrated.status = LEGACY_TASK_STATUS[migrated.status];
+    }
+    if (migrated.lastRun === LEGACY_NEVER_RUN) {
+      migrated.lastRun = "";
+    }
+    return migrated;
+  });
+}
+
+const scheduledTasks = ref(normalizeStoredTasks(JSON.parse(localStorage.getItem("rclone_scheduled_tasks") || "[]")));
 const showAddTaskModal = ref(false);
 const showEditTaskModal = ref(false);
 const newTask = reactive({
@@ -501,11 +571,13 @@ const CURRENT_VERSION = "1.6.6";
 const GITHUB_REPO = "Alia2006/rclone-drive";
 
 const savedUpdateSettings = JSON.parse(localStorage.getItem("rclone_update_settings") || "{}");
+const LEGACY_NEVER_CHECKED = "\u4ece\u672a\u68c0\u67e5"; // 旧版默认值「从未检查」，迁移为空字符串
+const savedLastCheckTimeStr = savedUpdateSettings.lastCheckTimeStr;
 const updateSettings = reactive({
   enabled: savedUpdateSettings.enabled !== false, // 默认打开自动检查
   intervalDays: Number(savedUpdateSettings.intervalDays) || 7, // 默认一周 (7 天)
   lastCheckTs: Number(savedUpdateSettings.lastCheckTs) || 0,
-  lastCheckTimeStr: savedUpdateSettings.lastCheckTimeStr || "从未检查"
+  lastCheckTimeStr: savedLastCheckTimeStr && savedLastCheckTimeStr !== LEGACY_NEVER_CHECKED ? savedLastCheckTimeStr : ""
 });
 
 function saveUpdateSettings() {
@@ -515,7 +587,7 @@ function saveUpdateSettings() {
 function toggleUpdateEnabled() {
   updateSettings.enabled = !updateSettings.enabled;
   saveUpdateSettings();
-  showToast(updateSettings.enabled ? "已启用自动检查版本更新 🔔" : "已关闭自动检查更新 🔕", "info");
+  showToast(updateSettings.enabled ? t("msg.update.autoEnabled") : t("msg.update.autoDisabled"), "info");
 }
 
 const showUpdateModal = ref(false);
@@ -560,21 +632,21 @@ async function checkForUpdates(manual = false) {
       headers: { Accept: "application/vnd.github.v3+json" }
     });
     if (!res.ok) {
-      throw new Error(`GitHub API 响应错误 (${res.status} ${res.statusText})`);
+      throw new Error(t("msg.update.apiError", { status: res.status, statusText: res.statusText }));
     }
     const data = await res.json();
     const latestTag = data.tag_name || "";
 
     updateSettings.lastCheckTs = Date.now();
-    updateSettings.lastCheckTimeStr = new Date().toLocaleString();
+    updateSettings.lastCheckTimeStr = new Date().toLocaleString(dateLocale());
     saveUpdateSettings();
 
     if (compareSemver(latestTag, CURRENT_VERSION) > 0) {
       updateInfo.latestVersion = latestTag.replace(/^v/i, "");
       updateInfo.currentVersion = CURRENT_VERSION;
       updateInfo.releaseTitle = data.name || latestTag;
-      updateInfo.releaseNotes = data.body || "本次更新包含功能改进与问题修复。";
-      updateInfo.publishedAt = data.published_at ? new Date(data.published_at).toLocaleDateString() : "";
+      updateInfo.releaseNotes = data.body || t("msg.update.defaultNotes");
+      updateInfo.publishedAt = data.published_at ? new Date(data.published_at).toLocaleDateString(dateLocale()) : "";
       updateInfo.htmlUrl = data.html_url || `https://github.com/${GITHUB_REPO}/releases/latest`;
 
       let assetUrl = "";
@@ -594,12 +666,12 @@ async function checkForUpdates(manual = false) {
       showUpdateModal.value = true;
     } else {
       if (manual) {
-        showToast(`目前已是最新版本 (v${CURRENT_VERSION})！`, "success");
+        showToast(t("msg.update.upToDate", { version: CURRENT_VERSION }), "success");
       }
     }
   } catch (err) {
     if (manual) {
-      showToast(`检查更新失败: ${err.message || err}`, "error");
+      showToast(t("msg.update.checkFailed", { error: err.message || err }), "error");
     }
   } finally {
     isCheckingUpdate.value = false;
@@ -614,7 +686,7 @@ async function executeUpdate() {
   }
 
   isDownloadingUpdate.value = true;
-  showToast("正在安全卸载所有已挂载磁盘，并下载安装更新...", "info");
+  showToast(t("msg.update.installing"), "info");
   try {
     // 1. 先安全卸载所有已挂载的磁盘
     try {
@@ -625,10 +697,10 @@ async function executeUpdate() {
     const msg = await invoke("download_and_install_update", {
       downloadUrl: updateInfo.downloadUrl
     });
-    showToast(msg || "更新安装程序已成功启动，主程序即将退出...", "success");
+    showToast(msg || t("msg.update.launchSuccess"), "success");
     showUpdateModal.value = false;
   } catch (err) {
-    showToast(`自动启动更新失败: ${err}，已为您在浏览器打开下载页面`, "error");
+    showToast(t("msg.update.startFailed", { error: err }), "error");
     await openUrl(updateInfo.htmlUrl);
     showUpdateModal.value = false;
   } finally {
@@ -652,7 +724,7 @@ async function openUrl(url) {
   try {
     await invoke("open_browser_url", { url });
   } catch (err) {
-    showToast(`打开网页失败: ${err}`, "error");
+    showToast(t("msg.explorer.openUrlFailed", { error: err }), "error");
   }
 }
 
@@ -661,33 +733,40 @@ function getProviderDetails(type = "", description = "") {
   const t = (type || "").toLowerCase();
   const d = (description || "").toLowerCase();
   // 大陆网盘通过 description 标记识别（底层多为 webdav）
-  if (d.includes("坚果云") || d.includes("nutstore")) return { name: "坚果云 (WebDAV)", color: "#00B96B", bg: "rgba(0, 185, 107, 0.15)" };
-  if (d.includes("123云盘") || d.includes("123 云盘") || d.includes("123pan")) return { name: "123 云盘 (WebDAV)", color: "#2F6BFF", bg: "rgba(47, 107, 255, 0.15)" };
-  if (d.includes("openlist") || d.includes("alist")) return { name: "OpenList / AList 聚合", color: "#6366F1", bg: "rgba(99, 102, 241, 0.15)" };
-  if (t.includes("pikpak")) return { name: "PikPak 网盘", color: "#00A3FF", bg: "rgba(0, 163, 255, 0.15)" };
-  if (t.includes("nutstore") || t.includes("jianguoyun")) return { name: "坚果云 (WebDAV)", color: "#00B96B", bg: "rgba(0, 185, 107, 0.15)" };
-  if (t.includes("pan123") || t.includes("123pan")) return { name: "123 云盘 (WebDAV)", color: "#2F6BFF", bg: "rgba(47, 107, 255, 0.15)" };
-  if (t.includes("openlist") || t.includes("alist")) return { name: "OpenList / AList 聚合", color: "#6366F1", bg: "rgba(99, 102, 241, 0.15)" };
-  if (t.includes("onedrive")) return { name: "Microsoft OneDrive", color: "#0078D4", bg: "rgba(0, 120, 212, 0.15)" };
-  if (t.includes("drive") && !t.includes("onedrive") && !t.includes("proton") && !t.includes("huawei")) return { name: "Google Drive", color: "#4285F4", bg: "rgba(66, 133, 244, 0.15)" };
-  if (t.includes("photo")) return { name: "Google Photos", color: "#EA4335", bg: "rgba(234, 67, 53, 0.15)" };
-  if (t.includes("dropbox")) return { name: "Dropbox", color: "#0061FF", bg: "rgba(0, 97, 255, 0.15)" };
-  if (t.includes("s3")) return { name: "Amazon S3 / 对象存储", color: "#FF9900", bg: "rgba(255, 153, 0, 0.15)" };
-  if (t.includes("b2")) return { name: "Backblaze B2", color: "#E01F26", bg: "rgba(224, 31, 38, 0.15)" };
-  if (t.includes("azureblob") || t.includes("azurefiles")) return { name: "Azure 存储", color: "#0089D6", bg: "rgba(0, 137, 214, 0.15)" };
-  if (t.includes("gcs") || t.includes("googlecloudstorage")) return { name: "Google Cloud Storage", color: "#4285F4", bg: "rgba(66, 133, 244, 0.15)" };
-  if (t.includes("box")) return { name: "Box", color: "#0061D5", bg: "rgba(0, 97, 213, 0.15)" };
-  if (t.includes("pcloud")) return { name: "pCloud", color: "#13B5EA", bg: "rgba(19, 181, 234, 0.15)" };
-  if (t.includes("mega")) return { name: "Mega", color: "#D90007", bg: "rgba(217, 0, 7, 0.15)" };
-  if (t.includes("proton")) return { name: "Proton Drive", color: "#6D4AFF", bg: "rgba(109, 74, 255, 0.15)" };
-  if (t.includes("webdav")) return { name: "WebDAV", color: "#10B981", bg: "rgba(16, 185, 129, 0.15)" };
-  if (t.includes("smb")) return { name: "SMB 网上邻居", color: "#3B82F6", bg: "rgba(59, 130, 246, 0.15)" };
-  if (t.includes("sftp")) return { name: "SFTP / SSH", color: "#8B5CF6", bg: "rgba(139, 92, 246, 0.15)" };
-  if (t.includes("ftp")) return { name: "FTP 服务器", color: "#A855F7", bg: "rgba(168, 85, 247, 0.15)" };
-  if (t.includes("local")) return { name: "本机磁盘 (Local)", color: "#14B8A6", bg: "rgba(20, 184, 166, 0.15)" };
-  if (t.includes("crypt")) return { name: "加密硬盘 (Crypt)", color: "#F59E0B", bg: "rgba(245, 158, 11, 0.15)" };
-  if (t.includes("union")) return { name: "联合磁盘 (Union)", color: "#EC4899", bg: "rgba(236, 72, 153, 0.15)" };
-  return { name: type || "云存储", color: "#38BDF8", bg: "rgba(56, 189, 248, 0.15)" };
+  if (d.includes("坚果云") || d.includes("nutstore")) return { nameKey: "provider.detail.nutstore", color: "#00B96B", bg: "rgba(0, 185, 107, 0.15)" };
+  if (d.includes("123云盘") || d.includes("123 云盘") || d.includes("123pan")) return { nameKey: "provider.detail.pan123", color: "#2F6BFF", bg: "rgba(47, 107, 255, 0.15)" };
+  if (d.includes("openlist") || d.includes("alist")) return { nameKey: "provider.detail.openlist", color: "#6366F1", bg: "rgba(99, 102, 241, 0.15)" };
+  if (t.includes("pikpak")) return { nameKey: "provider.detail.pikpak", color: "#00A3FF", bg: "rgba(0, 163, 255, 0.15)" };
+  if (t.includes("nutstore") || t.includes("jianguoyun")) return { nameKey: "provider.detail.nutstore", color: "#00B96B", bg: "rgba(0, 185, 107, 0.15)" };
+  if (t.includes("pan123") || t.includes("123pan")) return { nameKey: "provider.detail.pan123", color: "#2F6BFF", bg: "rgba(47, 107, 255, 0.15)" };
+  if (t.includes("openlist") || t.includes("alist")) return { nameKey: "provider.detail.openlist", color: "#6366F1", bg: "rgba(99, 102, 241, 0.15)" };
+  if (t.includes("onedrive")) return { nameKey: "provider.detail.onedrive", color: "#0078D4", bg: "rgba(0, 120, 212, 0.15)" };
+  if (t.includes("drive") && !t.includes("onedrive") && !t.includes("proton") && !t.includes("huawei")) return { nameKey: "provider.detail.drive", color: "#4285F4", bg: "rgba(66, 133, 244, 0.15)" };
+  if (t.includes("photo")) return { nameKey: "provider.detail.photos", color: "#EA4335", bg: "rgba(234, 67, 53, 0.15)" };
+  if (t.includes("dropbox")) return { nameKey: "provider.detail.dropbox", color: "#0061FF", bg: "rgba(0, 97, 255, 0.15)" };
+  if (t.includes("s3")) return { nameKey: "provider.detail.s3", color: "#FF9900", bg: "rgba(255, 153, 0, 0.15)" };
+  if (t.includes("b2")) return { nameKey: "provider.detail.b2", color: "#E01F26", bg: "rgba(224, 31, 38, 0.15)" };
+  if (t.includes("azureblob") || t.includes("azurefiles")) return { nameKey: "provider.detail.azureblob", color: "#0089D6", bg: "rgba(0, 137, 214, 0.15)" };
+  if (t.includes("gcs") || t.includes("googlecloudstorage")) return { nameKey: "provider.detail.gcs", color: "#4285F4", bg: "rgba(66, 133, 244, 0.15)" };
+  if (t.includes("box")) return { nameKey: "provider.detail.box", color: "#0061D5", bg: "rgba(0, 97, 213, 0.15)" };
+  if (t.includes("pcloud")) return { nameKey: "provider.detail.pcloud", color: "#13B5EA", bg: "rgba(19, 181, 234, 0.15)" };
+  if (t.includes("mega")) return { nameKey: "provider.detail.mega", color: "#D90007", bg: "rgba(217, 0, 7, 0.15)" };
+  if (t.includes("proton")) return { nameKey: "provider.detail.proton", color: "#6D4AFF", bg: "rgba(109, 74, 255, 0.15)" };
+  if (t.includes("webdav")) return { nameKey: "provider.detail.webdav", color: "#10B981", bg: "rgba(16, 185, 129, 0.15)" };
+  if (t.includes("smb")) return { nameKey: "provider.detail.smb", color: "#3B82F6", bg: "rgba(59, 130, 246, 0.15)" };
+  if (t.includes("sftp")) return { nameKey: "provider.detail.sftp", color: "#8B5CF6", bg: "rgba(139, 92, 246, 0.15)" };
+  if (t.includes("ftp")) return { nameKey: "provider.detail.ftp", color: "#A855F7", bg: "rgba(168, 85, 247, 0.15)" };
+  if (t.includes("local")) return { nameKey: "provider.detail.local", color: "#14B8A6", bg: "rgba(20, 184, 166, 0.15)" };
+  if (t.includes("crypt")) return { nameKey: "provider.detail.crypt", color: "#F59E0B", bg: "rgba(245, 158, 11, 0.15)" };
+  if (t.includes("union")) return { nameKey: "provider.detail.union", color: "#EC4899", bg: "rgba(236, 72, 153, 0.15)" };
+  // 未识别类型：nameRaw 保留原始 backend 类型用于显示，空类型回退到「云存储」
+  return { nameKey: "provider.detail.unknown", nameRaw: type || "", color: "#38BDF8", bg: "rgba(56, 189, 248, 0.15)" };
+}
+
+// 列表徽标显示名：未识别类型直接显示原始 backend 名，其余按 nameKey 本地化
+function providerDetailName(type = "", description = "") {
+  const detail = getProviderDetails(type, description);
+  return detail.nameRaw || t(detail.nameKey);
 }
 
 // Autostart & Start Minimized
@@ -698,8 +777,11 @@ async function checkAutostart() {
     if (settings && typeof settings.start_minimized_to_tray === "boolean") {
       startMinimizedActive.value = settings.start_minimized_to_tray;
     }
+    if (!localStorage.getItem("rclone_language") && normalizeLocale(settings?.language)) {
+      localStorage.setItem("rclone_language", setLocale(settings.language));
+    }
   } catch (err) {
-    console.error("检查开机自启与偏好失败:", err);
+    console.error("Failed to check autostart and preferences:", err);
   }
 }
 
@@ -708,14 +790,14 @@ async function toggleAutostart() {
     if (autostartActive.value) {
       await disable();
       autostartActive.value = false;
-      showToast("已关闭开机自动启动", "info");
+      showToast(t("msg.autostart.disabled"), "info");
     } else {
       await enable();
       autostartActive.value = true;
-      showToast("已打开开机自动启动！", "success");
+      showToast(t("msg.autostart.enabled"), "success");
     }
   } catch (err) {
-    showToast(`设置开机自启失败: ${err}`, "error");
+    showToast(t("msg.autostart.failed", { error: err }), "error");
   }
 }
 
@@ -724,17 +806,18 @@ async function toggleStartMinimized() {
     startMinimizedActive.value = !startMinimizedActive.value;
     await invoke("save_app_settings", {
       settings: {
-        start_minimized_to_tray: startMinimizedActive.value
+        start_minimized_to_tray: startMinimizedActive.value,
+        language: locale.value
       }
     });
     showToast(
       startMinimizedActive.value
-        ? "已启用「开机启动后缩小至系统托盘」"
-        : "已禁用「开机启动后缩小至系统托盘」（开机自启时将直接显示主窗口）",
+        ? t("msg.tray.enabled")
+        : t("msg.tray.disabled"),
       "success"
     );
   } catch (err) {
-    showToast(`设置缩小至系统托盘失败: ${err}`, "error");
+    showToast(t("msg.tray.failed", { error: err }), "error");
   }
 }
 
@@ -761,7 +844,7 @@ function moveRemote(remoteName, direction) {
   if (mountSortBy.value !== "custom") {
     customRemoteOrder.value = sortedRemotes.value.map((r) => r.name);
     mountSortBy.value = "custom";
-    showToast("已自动切换至「自定义顺序」模式", "info");
+    showToast(t("msg.sort.autoSwitched"), "info");
   } else if (!customRemoteOrder.value || customRemoteOrder.value.length === 0) {
     customRemoteOrder.value = remotes.value.map((r) => r.name);
   }
@@ -850,7 +933,7 @@ async function refreshAll(isInitial = false) {
     try {
       await invoke("apply_mounted_drive_icons", { remotes: remoteList });
     } catch (e) {
-      console.warn("应用磁盘图标警告:", e);
+      console.warn("Failed to apply drive icons:", e);
     }
 
     let driveIndex = 0;
@@ -896,7 +979,7 @@ async function refreshAll(isInitial = false) {
       }
     }
   } catch (err) {
-    showToast(`加载失败: ${err}`, "error");
+    showToast(t("msg.app.loadFailed", { error: err }), "error");
   } finally {
     isRefreshing.value = false;
   }
@@ -905,18 +988,18 @@ async function refreshAll(isInitial = false) {
 // Mount Remote (Network Mode exclusively)
 async function mountDrive(remoteName, notify = true) {
   if (!envStatus.value.winfsp_found) {
-    showToast("挂载需要 WinFsp，请先点击上方按钮安装 WinFsp！", "error");
+    showToast(t("msg.mount.needWinfsp"), "error");
     return;
   }
   if (!envStatus.value.rclone_found) {
-    showToast("找不到 rclone.exe，请先下载安装！", "error");
+    showToast(t("msg.mount.needRclone"), "error");
     return;
   }
 
   ensureRemoteMountOptions(remoteName);
   const conf = remoteConfigs[remoteName];
   if (!conf || !conf.driveLetter) {
-    showToast("请先选择盘符！", "error");
+    showToast(t("msg.mount.selectDrive"), "error");
     return;
   }
 
@@ -946,11 +1029,11 @@ async function mountDrive(remoteName, notify = true) {
     });
 
     if (notify) {
-      showToast(`已成功挂载 ${remoteName} 至磁盘 ${conf.driveLetter}`, "success");
+      showToast(t("msg.mount.success", { name: remoteName, drive: conf.driveLetter }), "success");
     }
     await refreshAll();
   } catch (err) {
-    showToast(`挂载失败: ${err}`, "error");
+    showToast(t("msg.mount.failed", { error: err }), "error");
   } finally {
     loadingRemotes.delete(remoteName);
   }
@@ -961,10 +1044,10 @@ async function unmountDrive(remoteName) {
   loadingRemotes.add(remoteName);
   try {
     await invoke("unmount_remote", { remote: remoteName });
-    showToast(`已卸载 ${remoteName}`, "info");
+    showToast(t("msg.unmount.success", { name: remoteName }), "info");
     await refreshAll();
   } catch (err) {
-    showToast(`卸载失败: ${err}`, "error");
+    showToast(t("msg.unmount.failed", { error: err }), "error");
   } finally {
     loadingRemotes.delete(remoteName);
   }
@@ -975,7 +1058,7 @@ async function openExplorer(driveLetter) {
   try {
     await invoke("open_in_explorer", { driveLetter });
   } catch (err) {
-    showToast(`无法打开资源管理器: ${err}`, "error");
+    showToast(t("msg.explorer.failed", { error: err }), "error");
   }
 }
 
@@ -990,7 +1073,7 @@ async function vfsRefreshCache(remoteName) {
     });
     showToast(`✅ ${msg}`, "success");
   } catch (err) {
-    showToast(`刷新缓存失败: ${err}`, "error");
+    showToast(t("msg.cache.refreshFailed", { error: err }), "error");
   } finally {
     refreshingCacheRemotes.delete(remoteName);
   }
@@ -1000,13 +1083,13 @@ async function vfsRefreshCache(remoteName) {
 async function mountAll() {
   const unmounted = sortedRemotes.value.filter((r) => !r.is_mounted);
   if (unmounted.length === 0) {
-    showToast("所有云端硬盘都已处于挂载状态", "info");
+    showToast(t("msg.mountAll.none"), "info");
     return;
   }
   for (const r of unmounted) {
     await mountDrive(r.name, false);
   }
-  showToast("已执行挂载全部操作", "success");
+  showToast(t("msg.mountAll.done"), "success");
   await refreshAll();
 }
 
@@ -1014,10 +1097,10 @@ async function mountAll() {
 async function unmountAll() {
   try {
     const count = await invoke("unmount_all");
-    showToast(`已成功卸载 ${count} 个云端硬盘`, "info");
+    showToast(t("msg.unmountAll.success", { count }), "info");
     await refreshAll();
   } catch (err) {
-    showToast(`卸载全部失败: ${err}`, "error");
+    showToast(t("msg.unmountAll.failed", { error: err }), "error");
   }
 }
 
@@ -1025,29 +1108,29 @@ async function unmountAll() {
 async function submitAddRemote() {
   const nameTrimmed = (newRemoteForm.name || "").trim();
   if (!nameTrimmed) {
-    showToast("请输入云端硬盘名称！", "error");
+    showToast(t("msg.remote.nameRequired"), "error");
     return;
   }
   if (/[\\/:*?"<>|\[\]]/.test(nameTrimmed)) {
-    showToast("云端硬盘名称不可包含特殊字符 (: / \\ [ ] * ? < > | \")", "error");
+    showToast(t("msg.remote.nameInvalid"), "error");
     return;
   }
   if (newRemoteForm.type === "openlist" && !(newRemoteForm.url || "").trim()) {
-    showToast("请填写 OpenList / AList 的 WebDAV 地址，例如 http://192.168.1.10:5244/dav", "error");
+    showToast(t("msg.remote.openlistUrlRequired"), "error");
     return;
   }
   if (isChinaNetdiskType(newRemoteForm.type)) {
     if (!(newRemoteForm.user || "").trim()) {
-      showToast(newRemoteForm.type === "openlist" ? "请填写 OpenList / AList 的登录账号！" : "请填写网盘账号！", "error");
+      showToast(newRemoteForm.type === "openlist" ? t("msg.remote.openlistUserRequired") : t("msg.remote.netdiskUserRequired"), "error");
       return;
     }
     if (!(newRemoteForm.pass || "").trim()) {
       if (newRemoteForm.type === "nutstore") {
-        showToast("请填写坚果云「应用密码」（非网页登录密码）！", "error");
+        showToast(t("msg.remote.nutstorePassRequired"), "error");
       } else if (newRemoteForm.type === "pan123") {
-        showToast("请填写 123 云盘「应用密码」（非网页登录密码）！", "error");
+        showToast(t("msg.remote.pan123PassRequired"), "error");
       } else {
-        showToast("请填写网盘密码！", "error");
+        showToast(t("msg.remote.netdiskPassRequired"), "error");
       }
       return;
     }
@@ -1136,7 +1219,7 @@ async function submitAddRemote() {
       nonInteractive: isChinaNetdiskType(newRemoteForm.type)
     });
 
-    showToast(msg || "远程创建成功！", "success");
+    showToast(msg || t("msg.remote.createSuccess"), "success");
     showAddRemoteModal.value = false;
     const savedType = newRemoteForm.type;
     const savedPath = (newRemoteForm.remotePath || "").trim();
@@ -1161,7 +1244,7 @@ async function submitAddRemote() {
       saveRemoteConfigs();
     }
   } catch (err) {
-    showToast(`创建失败: ${err}`, "error");
+    showToast(t("msg.remote.createFailed", { error: err }), "error");
   } finally {
     newRemoteForm.isCreating = false;
   }
@@ -1220,7 +1303,7 @@ async function openEditModal(remote) {
     if (details.account) editRemoteForm.account = details.account;
     if (details.key) editRemoteForm.key = details.key;
   } catch (err) {
-    console.error("加载设置详情失败:", err);
+    console.error("Failed to load remote details:", err);
   }
 
   showEditRemoteModal.value = true;
@@ -1230,11 +1313,11 @@ async function openEditModal(remote) {
 async function submitEditRemote() {
   const trimmedNewName = (editRemoteForm.newName || "").trim();
   if (!trimmedNewName) {
-    showToast("云端硬盘名称不能为空！", "error");
+    showToast(t("msg.remote.editNameRequired"), "error");
     return;
   }
   if (/[\\/:*?"<>|\[\]]/.test(trimmedNewName)) {
-    showToast("云端硬盘名称不可包含特殊字符 (: / \\ [ ] * ? < > | \")", "error");
+    showToast(t("msg.remote.nameInvalid"), "error");
     return;
   }
 
@@ -1324,11 +1407,11 @@ async function submitEditRemote() {
       saveRemoteConfigs();
     }
 
-    showToast(msg || "设置更新成功！", "success");
+    showToast(msg || t("msg.remote.updateSuccess"), "success");
     showEditRemoteModal.value = false;
     await refreshAll();
   } catch (err) {
-    showToast(`更新失败: ${err}`, "error");
+    showToast(t("msg.remote.updateFailed", { error: err }), "error");
   } finally {
     editRemoteForm.isSaving = false;
   }
@@ -1338,15 +1421,15 @@ async function submitEditRemote() {
 async function handleReconnectRemote() {
   editRemoteForm.isReconnecting = true;
   try {
-    showToast("已启动浏览器授权登录页面，请在浏览器中同意授权...", "info");
+    showToast(t("msg.remote.reauthStarted"), "info");
     const msg = await invoke("reconnect_remote_gui", {
       rclonePath: customRclonePath.value.trim() || null,
       name: editRemoteForm.name
     });
-    showToast(msg || "重新登录授权成功！", "success");
+    showToast(msg || t("msg.remote.reauthSuccess"), "success");
     await refreshAll();
   } catch (err) {
-    showToast(`重新授权失败: ${err}`, "error");
+    showToast(t("msg.remote.reauthFailed", { error: err }), "error");
   } finally {
     editRemoteForm.isReconnecting = false;
   }
@@ -1354,7 +1437,7 @@ async function handleReconnectRemote() {
 
 // Delete Remote
 async function handleDeleteRemote(name) {
-  if (!confirm(`确定要删除云端设置【${name}】吗？这不会删除云端上的文件。`)) return;
+  if (!confirm(t("msg.remote.deleteConfirm", { name }))) return;
   try {
     await invoke("delete_remote_gui", {
       rclonePath: customRclonePath.value.trim() || null,
@@ -1368,10 +1451,10 @@ async function handleDeleteRemote(name) {
       customRemoteOrder.value = customRemoteOrder.value.filter((n) => n !== name);
       saveSortSettings();
     }
-    showToast(`已成功删除 ${name}`, "info");
+    showToast(t("msg.remote.deleteSuccess", { name }), "info");
     await refreshAll();
   } catch (err) {
-    showToast(`删除失败: ${err}`, "error");
+    showToast(t("msg.remote.deleteFailed", { error: err }), "error");
   }
 }
 
@@ -1384,9 +1467,9 @@ async function toggleWebGui() {
       enable: nextState
     });
     envStatus.value.webgui_running = running;
-    showToast(running ? "已在后台启动 Rclone 官方 Web-GUI！" : "已停止 Web-GUI 服务", "info");
+    showToast(running ? t("msg.webgui.started") : t("msg.webgui.stopped"), "info");
   } catch (err) {
-    showToast(`Web-GUI 操作失败: ${err}`, "error");
+    showToast(t("msg.webgui.failed", { error: err }), "error");
   }
 }
 
@@ -1432,10 +1515,10 @@ async function pickLocalFolder(target = "source", extraIndex = null) {
       } else {
         syncForm.dest = selected;
       }
-      showToast(`已选择文件夹: ${selected}`, "success");
+      showToast(t("msg.browse.localSelected", { path: selected }), "success");
     }
   } catch (err) {
-    showToast(`打开文件夹选择窗口失败: ${err}`, "error");
+    showToast(t("msg.browse.localFailed", { error: err }), "error");
   }
 }
 
@@ -1475,7 +1558,7 @@ async function openCloudBrowseModal(target = "source", extraIndex = null) {
     cloudBrowseRemote.value = remotes.value[0].name;
     cloudBrowseCurrentSubpath.value = "";
   } else {
-    showToast("尚未创建任何云端硬盘，请先在第一页添加！", "error");
+    showToast(t("msg.browse.noRemotes"), "error");
     return;
   }
   showCloudBrowseModal.value = true;
@@ -1496,7 +1579,7 @@ async function fetchCloudDirs() {
     });
     cloudBrowseDirs.value = dirs;
   } catch (err) {
-    showToast(`读取云端目录失败: ${err}`, "error");
+    showToast(t("msg.browse.listFailed", { error: err }), "error");
   } finally {
     isLoadingCloudDirs.value = false;
   }
@@ -1533,7 +1616,7 @@ function confirmCloudBrowseSelect() {
     syncForm.dest = finalPath;
   }
   showCloudBrowseModal.value = false;
-  showToast(`已选择云端路径: ${finalPath}`, "success");
+  showToast(t("msg.browse.cloudSelected", { path: finalPath }), "success");
 }
 
 // Filtered Diff Items (RcloneView style)
@@ -1574,7 +1657,7 @@ function toggleItemSelect(path) {
 // RcloneView Plus Compare / Check Diff
 async function handleCheckDiff() {
   if (!syncForm.source || !syncForm.dest) {
-    showToast("请先选择或填写来源与目标路径！", "error");
+    showToast(t("msg.sync.needPaths"), "error");
     return;
   }
   syncForm.isChecking = true;
@@ -1595,7 +1678,7 @@ async function handleCheckDiff() {
     syncForm.diffResult = res;
     showToast(res.message, "success");
   } catch (err) {
-    showToast(`比对失败: ${err}`, "error");
+    showToast(t("msg.sync.diffFailed", { error: err }), "error");
   } finally {
     syncForm.isChecking = false;
   }
@@ -1604,7 +1687,7 @@ async function handleCheckDiff() {
 // Copy Selected Items
 async function handleCopySelected() {
   if (syncForm.selectedItems.size === 0) {
-    showToast("请先勾选要拷贝的文件！", "error");
+    showToast(t("msg.sync.noFilesSelected"), "error");
     return;
   }
   syncForm.isCopyingSelected = true;
@@ -1617,11 +1700,11 @@ async function handleCopySelected() {
       files: filesToCopy
     });
     syncForm.taskLog = log;
-    showToast(`成功拷贝 ${filesToCopy.length} 个文件！`, "success");
+    showToast(t("msg.sync.copyCountSuccess", { count: filesToCopy.length }), "success");
     syncForm.selectedItems.clear();
     await handleCheckDiff();
   } catch (err) {
-    showToast(`拷贝失败: ${err}`, "error");
+    showToast(t("msg.sync.copyFailed", { error: err }), "error");
   } finally {
     syncForm.isCopyingSelected = false;
   }
@@ -1638,10 +1721,10 @@ async function handleCopySingleFile(filePath) {
       files: [filePath]
     });
     syncForm.taskLog = log;
-    showToast(`成功拷贝: ${filePath}`, "success");
+    showToast(t("msg.sync.copySingleSuccess", { path: filePath }), "success");
     await handleCheckDiff();
   } catch (err) {
-    showToast(`拷贝失败: ${err}`, "error");
+    showToast(t("msg.sync.copyFailed", { error: err }), "error");
   } finally {
     syncForm.isCopyingSelected = false;
   }
@@ -1651,7 +1734,7 @@ async function handleCopySingleFile(filePath) {
 function openScheduleFromSync() {
   const allDests = getAllDestinations();
   if (!syncForm.source || allDests.length === 0) {
-    showToast("请先选择或填写来源与至少一个目的路径！", "error");
+    showToast(t("msg.sync.needSourceAndDest"), "error");
     return;
   }
   const cleanSrc = syncForm.source.replace(/[\\/]+$/, "");
@@ -1660,7 +1743,9 @@ function openScheduleFromSync() {
   if (allDests.length === 1) {
     const cleanDst = allDests[0].replace(/[\\/]+$/, "");
     const dstName = cleanDst.split(/[\\/:]/).pop() || cleanDst;
-    newTask.name = `定时${syncForm.action === 'sync' ? '镜像同步' : '增量备份'}: ${srcName} ➔ ${dstName}`;
+    newTask.name = syncForm.action === 'sync'
+      ? t("msg.schedule.nameMirror", { src: srcName, dst: dstName })
+      : t("msg.schedule.nameBackup", { src: srcName, dst: dstName });
     newTask.source = syncForm.source.trim();
     newTask.dest = allDests[0];
     newTask.action = syncForm.action;
@@ -1675,20 +1760,22 @@ function openScheduleFromSync() {
       const dstName = cleanDst.split(/[\\/:]/).pop() || cleanDst;
       scheduledTasks.value.push({
         id: Date.now().toString() + Math.random().toString(36).slice(2, 5),
-        name: `定时${syncForm.action === 'sync' ? '同步' : '备份'}: ${srcName} ➔ ${dstName}`,
+        name: syncForm.action === 'sync'
+          ? t("msg.schedule.nameSync", { src: srcName, dst: dstName })
+          : t("msg.schedule.nameCopy", { src: srcName, dst: dstName }),
         source: syncForm.source.trim(),
         dest: d,
         action: syncForm.action,
         excludeFilter: syncForm.excludeFilter ? syncForm.excludeFilter.trim() : "",
         intervalMinutes: 60,
         enabled: true,
-        lastRun: "从未运行",
-        status: "待命"
+        lastRun: "",
+        status: "idle"
       });
       addedCount++;
     }
     saveScheduledTasks();
-    showToast(`已成功为 ${addedCount} 个目的地创建后台调度任务！`, "success");
+    showToast(t("msg.schedule.batchCreated", { count: addedCount }), "success");
     activeTab.value = "scheduler";
   }
 }
@@ -1697,11 +1784,11 @@ function openScheduleFromSync() {
 async function handleRunSync() {
   const allDests = getAllDestinations();
   if (!syncForm.source || allDests.length === 0) {
-    showToast("请先选择或填写来源与至少一个目的路径！", "error");
+    showToast(t("msg.sync.needSourceAndDest"), "error");
     return;
   }
   syncForm.isRunning = true;
-  syncForm.taskLog = `正在运行同步任务中（共 ${allDests.length} 个目的地）...`;
+  syncForm.taskLog = t("msg.sync.runningLog", { count: allDests.length });
 
   const excludePatterns = syncForm.excludeFilter
     ? syncForm.excludeFilter.split(",").map((s) => s.trim()).filter(Boolean)
@@ -1715,9 +1802,9 @@ async function handleRunSync() {
     for (let i = 0; i < allDests.length; i++) {
       const curDest = allDests[i];
       const prefix = `[${i + 1}/${allDests.length}]`;
-      showToast(`正在传输至目的地 ${prefix}: ${curDest}...`, "info");
+      showToast(t("msg.sync.transferring", { prefix, dest: curDest }), "info");
       logs.push(`==================================================`);
-      logs.push(`${prefix} 开始同步: ${syncForm.source.trim()} ➔ ${curDest}`);
+      logs.push(t("msg.sync.logStart", { prefix, src: syncForm.source.trim(), dest: curDest }));
       logs.push(`==================================================`);
       syncForm.taskLog = logs.join("\n");
 
@@ -1729,19 +1816,19 @@ async function handleRunSync() {
           dest: curDest,
           excludePatterns
         });
-        logs.push(log || "任务运行完成！");
+        logs.push(log || t("msg.sync.logDone"));
         successCount++;
       } catch (destErr) {
-        logs.push(`❌ 此目的地同步失败: ${destErr}`);
+        logs.push(t("msg.sync.logDestFailed", { error: destErr }));
         failCount++;
       }
       syncForm.taskLog = logs.join("\n");
     }
 
     if (failCount === 0) {
-      showToast(`同步/备份全部成功！共传输至 ${successCount} 个目的地！`, "success");
+      showToast(t("msg.sync.allSuccess", { count: successCount }), "success");
     } else {
-      showToast(`同步完成：${successCount} 个成功，${failCount} 个失败，请查看日志！`, "warning");
+      showToast(t("msg.sync.partial", { success: successCount, failed: failCount }), "warning");
     }
 
     // 若勾选自动加入调度，为所有目的地加入后台定时调度
@@ -1759,16 +1846,18 @@ async function handleRunSync() {
         if (!exists) {
           const task = {
             id: Date.now().toString() + Math.random().toString(36).slice(2, 5),
-            name: `自动${syncForm.action === 'sync' ? '同步' : '备份'}: ${srcName} ➔ ${dstName}`,
+            name: syncForm.action === 'sync'
+              ? t("msg.schedule.nameAutoSync", { src: srcName, dst: dstName })
+              : t("msg.schedule.nameAutoCopy", { src: srcName, dst: dstName }),
             source: syncForm.source.trim(),
             dest: curDest,
             action: syncForm.action,
             excludeFilter: syncForm.excludeFilter ? syncForm.excludeFilter.trim() : "",
             intervalMinutes: 60,
             enabled: true,
-            lastRun: new Date().toLocaleTimeString(),
+            lastRun: new Date().toLocaleTimeString(dateLocale()),
             lastRunTs: Date.now(),
-            status: "成功完成"
+            status: "success"
           };
           scheduledTasks.value.push(task);
           addedCount++;
@@ -1776,14 +1865,14 @@ async function handleRunSync() {
       }
       if (addedCount > 0) {
         saveScheduledTasks();
-        showToast(`已为您将 ${addedCount} 个目的地自动加入后台定时调度！`, "success");
+        showToast(t("msg.schedule.autoAdded", { count: addedCount }), "success");
       }
     }
 
     await handleCheckDiff();
   } catch (err) {
-    syncForm.taskLog = `整体任务错误: ${err}`;
-    showToast(`任务失败: ${err}`, "error");
+    syncForm.taskLog = t("msg.sync.overallError", { error: err });
+    showToast(t("msg.sync.taskFailed", { error: err }), "error");
   } finally {
     syncForm.isRunning = false;
   }
@@ -1792,7 +1881,7 @@ async function handleRunSync() {
 // Scheduler: Add Task
 function submitAddTask() {
   if (!newTask.name.trim() || !newTask.source.trim() || !newTask.dest.trim()) {
-    showToast("请填写完整的任务信息！", "error");
+    showToast(t("msg.task.infoRequired"), "error");
     return;
   }
   const task = {
@@ -1804,8 +1893,8 @@ function submitAddTask() {
     excludeFilter: newTask.excludeFilter ? newTask.excludeFilter.trim() : "",
     intervalMinutes: Number(newTask.intervalMinutes) || 60,
     enabled: true,
-    lastRun: "从未运行",
-    status: "待命"
+    lastRun: "",
+    status: "idle"
   };
   scheduledTasks.value.push(task);
   saveScheduledTasks();
@@ -1814,13 +1903,13 @@ function submitAddTask() {
   newTask.source = "";
   newTask.dest = "";
   newTask.excludeFilter = "";
-  showToast("已成功创建调度任务！程序常驻右下角时将自动定时运行", "success");
+  showToast(t("msg.task.created"), "success");
 }
 
 function removeTask(id) {
   scheduledTasks.value = scheduledTasks.value.filter((t) => t.id !== id);
   saveScheduledTasks();
-  showToast("已删除任务", "info");
+  showToast(t("msg.task.deleted"), "info");
 }
 
 function toggleTaskEnabled(task) {
@@ -1842,12 +1931,12 @@ function openEditTaskModal(task) {
 
 function submitEditTask() {
   if (!editTaskForm.name.trim() || !editTaskForm.source.trim() || !editTaskForm.dest.trim()) {
-    showToast("请填写完整的任务信息！", "error");
+    showToast(t("msg.task.infoRequired"), "error");
     return;
   }
   const task = scheduledTasks.value.find((t) => t.id === editTaskForm.id);
   if (!task) {
-    showToast("找不到对应的调度任务！", "error");
+    showToast(t("msg.task.notFound"), "error");
     return;
   }
   task.name = editTaskForm.name.trim();
@@ -1859,19 +1948,19 @@ function submitEditTask() {
   task.enabled = editTaskForm.enabled;
   saveScheduledTasks();
   showEditTaskModal.value = false;
-  showToast("已成功更新调度任务设置！", "success");
+  showToast(t("msg.task.updated"), "success");
 }
 
 async function executeTaskNow(task) {
-  if (task.status === "运行中...") {
-    showToast("任务正在运行中，请稍候...", "info");
+  if (task.status === "running") {
+    showToast(t("msg.task.alreadyRunning"), "info");
     return;
   }
-  task.status = "运行中...";
-  task.lastRun = new Date().toLocaleTimeString();
+  task.status = "running";
+  task.lastRun = new Date().toLocaleTimeString(dateLocale());
   task.lastRunTs = Date.now();
   saveScheduledTasks();
-  showToast(`开始运行任务「${task.name}」...`, "info");
+  showToast(t("msg.task.starting", { name: task.name }), "info");
   try {
     const excludePatterns = task.excludeFilter
       ? task.excludeFilter.split(",").map((s) => s.trim()).filter(Boolean)
@@ -1883,13 +1972,13 @@ async function executeTaskNow(task) {
       dest: task.dest,
       excludePatterns
     });
-    task.status = "成功完成";
+    task.status = "success";
     saveScheduledTasks();
-    showToast(`调度任务「${task.name}」运行成功！`, "success");
+    showToast(t("msg.task.runSuccess", { name: task.name }), "success");
   } catch (err) {
-    task.status = "运行失败";
+    task.status = "failed";
     saveScheduledTasks();
-    showToast(`任务「${task.name}」失败: ${err}`, "error");
+    showToast(t("msg.task.runFailed", { name: task.name, error: err }), "error");
   }
 }
 
@@ -1905,9 +1994,9 @@ function runSchedulerCycle() {
     const intervalMs = (task.intervalMinutes || 60) * 60 * 1000;
     const lastRunTs = task.lastRunTs || 0;
     if (now - lastRunTs >= intervalMs) {
-      task.status = "运行中...";
+      task.status = "running";
       task.lastRunTs = now;
-      task.lastRun = new Date().toLocaleTimeString();
+      task.lastRun = new Date().toLocaleTimeString(dateLocale());
       try {
         const excludePatterns = task.excludeFilter
           ? task.excludeFilter.split(",").map((s) => s.trim()).filter(Boolean)
@@ -1919,9 +2008,9 @@ function runSchedulerCycle() {
           dest: task.dest,
           excludePatterns
         });
-        task.status = "成功完成";
+        task.status = "success";
       } catch (err) {
-        task.status = "运行失败";
+        task.status = "failed";
       }
       saveScheduledTasks();
     }
@@ -1945,7 +2034,7 @@ function toggleRemoteAutoMount(remoteName) {
 
 function saveCustomPath() {
   localStorage.setItem("rclone_custom_path", customRclonePath.value);
-  showToast("已保存 Rclone 路径设置！", "success");
+  showToast(t("msg.settings.pathSaved"), "success");
   refreshAll();
 }
 
@@ -1955,15 +2044,15 @@ const isInstallingWinFsp = ref(false);
 async function handleAutoInstallRclone() {
   if (isInstallingRclone.value) return;
   isInstallingRclone.value = true;
-  showToast("正在从官方下载并配置 Rclone 最新版，请稍候...", "info");
+  showToast(t("msg.rclone.installing"), "info");
   try {
     const installedPath = await invoke("auto_install_rclone");
     customRclonePath.value = installedPath;
     localStorage.setItem("rclone_custom_path", installedPath);
-    showToast(`Rclone 自动配置成功！已安装于：${installedPath}`, "success");
+    showToast(t("msg.rclone.installSuccess", { path: installedPath }), "success");
     await refreshAll();
   } catch (err) {
-    showToast(`自动安装 Rclone 失败: ${err}`, "error");
+    showToast(t("msg.rclone.installFailed", { error: err }), "error");
   } finally {
     isInstallingRclone.value = false;
   }
@@ -1972,13 +2061,13 @@ async function handleAutoInstallRclone() {
 async function handleAutoInstallWinFsp() {
   if (isInstallingWinFsp.value) return;
   isInstallingWinFsp.value = true;
-  showToast("正在下载 WinFsp 官方安装程序，下载完成后将自动启动安装向导...", "info");
+  showToast(t("msg.winfsp.installing"), "info");
   try {
     await invoke("auto_install_winfsp");
-    showToast("WinFsp 安装向导已启动！请于 Windows 安装向导中点击下一步完成安装。", "success");
+    showToast(t("msg.winfsp.installStarted"), "success");
     await refreshAll();
   } catch (err) {
-    showToast(`下载或安装 WinFsp 失败: ${err}`, "error");
+    showToast(t("msg.winfsp.installFailed", { error: err }), "error");
   } finally {
     isInstallingWinFsp.value = false;
   }
@@ -1997,7 +2086,12 @@ const mountedCount = computed(() => remotes.value.filter((r) => r.is_mounted).le
 const totalCount = computed(() => remotes.value.length);
 const isPrerequisiteMissing = computed(() => !envStatus.value.rclone_found || !envStatus.value.winfsp_found);
 
+watch(locale, (value) => {
+  setLocale(value);
+});
+
 onMounted(async () => {
+  setLocale(locale.value);
   applyTheme(isLightMode.value);
   await checkAutostart();
   await refreshAll(true);
@@ -2025,11 +2119,11 @@ onUnmounted(() => {
         <div>
           <div class="brand-title-row">
             <h1 class="brand-title">Rclone Drive & Sync</h1>
-            <span class="app-version-badge" @click="checkForUpdates(true)" title="当前版本 v{{ CURRENT_VERSION }}（点击检查更新）">
+            <span class="app-version-badge" @click="checkForUpdates(true)" :title="$t('ui.header.currentVersion', { version: CURRENT_VERSION })">
               v{{ CURRENT_VERSION }}
             </span>
           </div>
-          <p class="brand-subtitle">云端硬盘挂载 • 参数修改 • 差异比对 • 定时调度</p>
+          <p class="brand-subtitle">{{ $t('ui.header.subtitle') }}</p>
         </div>
       </div>
 
@@ -2041,7 +2135,7 @@ onUnmounted(() => {
           @click="activeTab = 'mounts'"
         >
           <HardDrive class="tab-icon" />
-          <span>硬盘挂载 (RaiDrive)</span>
+          <span>{{ $t('ui.header.tabMounts') }}</span>
         </button>
 
         <button
@@ -2050,7 +2144,7 @@ onUnmounted(() => {
           @click="activeTab = 'sync'"
         >
           <ArrowRightLeft class="tab-icon" />
-          <span>同步与比对 (Sync & Diff)</span>
+          <span>{{ $t('ui.header.tabSync') }}</span>
         </button>
 
         <button
@@ -2059,7 +2153,7 @@ onUnmounted(() => {
           @click="activeTab = 'scheduler'"
         >
           <CalendarClock class="tab-icon" />
-          <span>调度任务 ({{ scheduledTasks.length }})</span>
+          <span>{{ $t('ui.header.tabScheduler', { count: scheduledTasks.length }) }}</span>
         </button>
 
         <button
@@ -2078,22 +2172,22 @@ onUnmounted(() => {
           class="btn btn-secondary"
           @click="checkForUpdates(true)"
           :disabled="isCheckingUpdate"
-          title="检查 GitHub 最新版本"
+          :title="$t('ui.header.checkGithubUpdate')"
         >
           <DownloadCloud class="btn-icon" :class="{ 'spin-anim': isCheckingUpdate }" />
-          <span class="btn-text-hide-sm">检查更新</span>
+          <span class="btn-text-hide-sm">{{ $t('ui.header.checkUpdate') }}</span>
         </button>
 
-        <button class="btn btn-secondary" @click="toggleTheme" :title="isLightMode ? '切换为深色主题' : '切换为浅色主题'">
+        <button class="btn btn-secondary" @click="toggleTheme" :title="isLightMode ? $t('ui.header.switchDark') : $t('ui.header.switchLight')">
           <Sun v-if="isLightMode" class="btn-icon text-amber" />
           <Moon v-else class="btn-icon" />
         </button>
 
-        <button class="btn btn-secondary" @click="refreshAll(false)" :disabled="isRefreshing" title="刷新">
+        <button class="btn btn-secondary" @click="refreshAll(false)" :disabled="isRefreshing" :title="$t('common.refresh')">
           <RefreshCw class="btn-icon" :class="{ 'spin-anim': isRefreshing }" />
         </button>
 
-        <button class="btn btn-secondary" @click="showSettings = true" title="偏好设置">
+        <button class="btn btn-secondary" @click="showSettings = true" :title="$t('ui.header.preferences')">
           <Settings class="btn-icon" />
         </button>
       </div>
@@ -2104,7 +2198,7 @@ onUnmounted(() => {
       <div class="prereq-content">
         <div class="prereq-header">
           <AlertTriangle class="prereq-warn-icon" />
-          <span class="prereq-title">系统检测到缺少必要组件，云端硬盘挂载功能需要以下工具：</span>
+          <span class="prereq-title">{{ $t('ui.env.missingTitle') }}</span>
           <button
             v-if="!envStatus.rclone_found && !envStatus.winfsp_found"
             class="btn btn-emerald btn-sm ml-auto"
@@ -2112,7 +2206,7 @@ onUnmounted(() => {
             @click="handleAutoInstallAll"
           >
             <Zap class="btn-icon" />
-            <span>⚡ 一键自动安装全部必要组件</span>
+            <span>{{ $t('ui.env.installAll') }}</span>
           </button>
         </div>
 
@@ -2120,9 +2214,9 @@ onUnmounted(() => {
           <!-- Rclone Missing Card -->
           <div v-if="!envStatus.rclone_found" class="prereq-item-card">
             <div class="prereq-card-text">
-              <span class="prereq-badge">必要组件 1</span>
-              <h4>Rclone 核心可执行文件</h4>
-              <p>默认检查路径 <code>C:\rclone\rclone.exe</code> 尚未找到可执行文件。</p>
+              <span class="prereq-badge">{{ $t('ui.env.componentBadge1') }}</span>
+              <h4>{{ $t('ui.env.rcloneTitle') }}</h4>
+              <p>{{ $t('ui.env.rclonePathPrefix') }} <code>C:\rclone\rclone.exe</code> {{ $t('ui.env.rclonePathSuffix') }}</p>
             </div>
             <div class="prereq-btn-group">
               <button
@@ -2131,11 +2225,11 @@ onUnmounted(() => {
                 @click="handleAutoInstallRclone"
               >
                 <DownloadCloud class="btn-icon" :class="{ 'spin-anim': isInstallingRclone }" />
-                <span>{{ isInstallingRclone ? '正在自动下载配置中...' : '⚡ 一键自动下载配置 Rclone' }}</span>
+                <span>{{ isInstallingRclone ? $t('ui.env.installingRclone') : $t('ui.env.installRclone') }}</span>
               </button>
               <button class="btn btn-download-alt" @click="openUrl('https://rclone.org/downloads/')">
                 <ExternalLink class="btn-icon" />
-                <span>官网手动下载</span>
+                <span>{{ $t('ui.env.manualDownload') }}</span>
               </button>
             </div>
           </div>
@@ -2143,9 +2237,9 @@ onUnmounted(() => {
           <!-- WinFsp Missing Card -->
           <div v-if="!envStatus.winfsp_found" class="prereq-item-card">
             <div class="prereq-card-text">
-              <span class="prereq-badge">必要组件 2</span>
-              <h4>WinFsp 文件系统核心</h4>
-              <p>Windows 虚拟文件系统驱动，未安装将无法创建本机盘符。</p>
+              <span class="prereq-badge">{{ $t('ui.env.componentBadge2') }}</span>
+              <h4>{{ $t('ui.env.winfspTitle') }}</h4>
+              <p>{{ $t('ui.env.winfspDesc') }}</p>
             </div>
             <div class="prereq-btn-group">
               <button
@@ -2154,11 +2248,11 @@ onUnmounted(() => {
                 @click="handleAutoInstallWinFsp"
               >
                 <DownloadCloud class="btn-icon" :class="{ 'spin-anim': isInstallingWinFsp }" />
-                <span>{{ isInstallingWinFsp ? '正在下载并启动安装程序...' : '⚡ 一键下载安装 WinFsp' }}</span>
+                <span>{{ isInstallingWinFsp ? $t('ui.env.installingWinFsp') : $t('ui.env.installWinFsp') }}</span>
               </button>
               <button class="btn btn-download-alt" @click="openUrl('https://winfsp.dev/')">
                 <ExternalLink class="btn-icon" />
-                <span>官网手动下载</span>
+                <span>{{ $t('ui.env.manualDownload') }}</span>
               </button>
             </div>
           </div>
@@ -2170,34 +2264,34 @@ onUnmounted(() => {
     <div class="env-banner">
       <div class="env-item" :class="{ 'env-ok': envStatus.rclone_found, 'env-warn': !envStatus.rclone_found }">
         <component :is="envStatus.rclone_found ? CheckCircle2 : AlertTriangle" class="env-icon" />
-        <span v-if="envStatus.rclone_found">Rclone: {{ envStatus.rclone_version ? (envStatus.rclone_version.toLowerCase().startsWith('rclone') ? envStatus.rclone_version.replace(/^rclone\s*/i, '') : envStatus.rclone_version) : '已连接' }}</span>
-        <span v-else class="clickable-link" @click="handleAutoInstallRclone" title="点击直接后台下载并自动配置 Rclone">
-          Rclone: 尚未安装 (⚡ 点此一键安装)
+        <span v-if="envStatus.rclone_found">Rclone: {{ envStatus.rclone_version ? (envStatus.rclone_version.toLowerCase().startsWith('rclone') ? envStatus.rclone_version.replace(/^rclone\s*/i, '') : envStatus.rclone_version) : $t('ui.env.connected') }}</span>
+        <span v-else class="clickable-link" @click="handleAutoInstallRclone" :title="$t('ui.env.rcloneInstallTip')">
+          {{ $t('ui.env.rcloneNotInstalled') }}
         </span>
       </div>
 
       <div class="env-item" :class="{ 'env-ok': envStatus.winfsp_found, 'env-warn': !envStatus.winfsp_found }">
         <component :is="envStatus.winfsp_found ? ShieldCheck : AlertTriangle" class="env-icon" />
-        <span v-if="envStatus.winfsp_found">WinFsp: 已就绪 (正常运作)</span>
-        <span v-else class="clickable-link" @click="handleAutoInstallWinFsp" title="点击直接下载 WinFsp 并启动安装向导">
-          WinFsp: 尚未安装 (⚡ 点此一键安装)
+        <span v-if="envStatus.winfsp_found">{{ $t('ui.env.winfspReady') }}</span>
+        <span v-else class="clickable-link" @click="handleAutoInstallWinFsp" :title="$t('ui.env.winfspInstallTip')">
+          {{ $t('ui.env.winfspNotInstalled') }}
         </span>
       </div>
 
       <div class="env-item" :class="{ 'env-ok': envStatus.webgui_running, 'env-neutral': !envStatus.webgui_running }">
         <Globe class="env-icon" />
-        <span>Web-GUI: {{ envStatus.webgui_running ? '127.0.0.1:5572 (运行中)' : '已停止' }}</span>
+        <span>Web-GUI: {{ envStatus.webgui_running ? $t('ui.env.webguiRunning') : $t('ui.env.webguiStopped') }}</span>
       </div>
 
       <div class="env-item env-neutral" v-if="autostartActive">
         <Check class="env-icon text-emerald" />
-        <span>开机自启动: 已启用</span>
+        <span>{{ $t('ui.env.autostartEnabled') }}</span>
       </div>
 
       <div class="env-item env-neutral ml-auto">
         <span class="count-pill">
           <span class="indicator-dot active"></span>
-          已挂载: {{ mountedCount }} / {{ totalCount }}
+          {{ $t('ui.env.mountedCount', { mounted: mountedCount, total: totalCount }) }}
         </span>
       </div>
     </div>
@@ -2209,38 +2303,38 @@ onUnmounted(() => {
         <!-- Sub Bar -->
         <div class="sub-bar">
           <div class="sub-title-group">
-            <h2>云端硬盘挂载列表</h2>
-            <p>已挂载为标准 Windows 网络磁盘，支持即点即用与在线读写，点击右上角 ✏️ 可直接修改设置与重新授权</p>
+            <h2>{{ $t('ui.mount.listTitle') }}</h2>
+            <p>{{ $t('ui.mount.listSubtitle') }}</p>
           </div>
           <div class="sub-actions">
             <!-- Sort Controls -->
-            <div v-if="remotes.length > 0" class="sort-select-wrapper" title="云端硬盘列表排序方式">
+            <div v-if="remotes.length > 0" class="sort-select-wrapper" :title="$t('ui.mount.sortTitle')">
               <ArrowUpDown class="sort-icon" />
-              <span class="sort-label">排序:</span>
+              <span class="sort-label">{{ $t('ui.mount.sortLabel') }}</span>
               <select v-model="mountSortBy" @change="onSortChange" class="sort-select">
-                <option value="default">默认配置</option>
-                <option value="custom">自定义顺序 (支持上移/下移)</option>
-                <option value="name-asc">名称 (A → Z)</option>
-                <option value="name-desc">名称 (Z → A)</option>
-                <option value="drive-asc">盘符 (A → Z)</option>
-                <option value="drive-desc">盘符 (Z → A)</option>
-                <option value="mounted-first">挂载状态 (已挂载优先)</option>
-                <option value="unmounted-first">挂载状态 (未挂载优先)</option>
-                <option value="type">云端类型 (服务商)</option>
+                <option value="default">{{ $t('ui.mount.sortDefault') }}</option>
+                <option value="custom">{{ $t('ui.mount.sortCustom') }}</option>
+                <option value="name-asc">{{ $t('ui.mount.sortNameAsc') }}</option>
+                <option value="name-desc">{{ $t('ui.mount.sortNameDesc') }}</option>
+                <option value="drive-asc">{{ $t('ui.mount.sortDriveAsc') }}</option>
+                <option value="drive-desc">{{ $t('ui.mount.sortDriveDesc') }}</option>
+                <option value="mounted-first">{{ $t('ui.mount.sortMountedFirst') }}</option>
+                <option value="unmounted-first">{{ $t('ui.mount.sortUnmountedFirst') }}</option>
+                <option value="type">{{ $t('ui.mount.sortType') }}</option>
               </select>
             </div>
 
             <button class="btn btn-primary" @click="showAddRemoteModal = true">
               <PlusCircle class="btn-icon" />
-              <span>添加云端硬盘</span>
+              <span>{{ $t('ui.mount.addDrive') }}</span>
             </button>
             <button class="btn btn-secondary" @click="mountAll" :disabled="mountedCount === totalCount || totalCount === 0 || isPrerequisiteMissing">
               <Disc3 class="btn-icon" />
-              <span>挂载全部</span>
+              <span>{{ $t('ui.mount.mountAll') }}</span>
             </button>
             <button class="btn btn-danger-outline" @click="unmountAll" :disabled="mountedCount === 0">
               <Power class="btn-icon" />
-              <span>卸载全部</span>
+              <span>{{ $t('ui.mount.unmountAll') }}</span>
             </button>
           </div>
         </div>
@@ -2262,23 +2356,23 @@ onUnmounted(() => {
               <div class="remote-meta">
                 <div class="remote-name" :title="remote.name">{{ remote.name }}</div>
                 <div class="remote-type-tag">
-                  {{ getProviderDetails(remote.remote_type, remote.description).name }}
+                  {{ providerDetailName(remote.remote_type, remote.description) }}
                 </div>
               </div>
 
               <div class="mount-status-badge" :class="remote.is_mounted ? 'status-mounted' : 'status-unmounted'">
                 <span class="status-dot"></span>
-                {{ remote.is_mounted ? `已挂载 (${remote.mounted_drive})` : '未挂载' }}
+                {{ remote.is_mounted ? $t('ui.mount.mountedWithDrive', { drive: remote.mounted_drive }) : $t('ui.mount.unmounted') }}
               </div>
 
               <!-- Reorder & Action Buttons -->
               <div class="card-header-actions">
-                <div class="reorder-btns" title="调整卡片显示顺序 (点击将自动切换为自定义排序)">
+                <div class="reorder-btns" :title="$t('ui.mount.reorderTip')">
                   <button
                     class="icon-btn-action icon-btn-reorder"
                     :disabled="index === 0"
                     @click.stop="moveRemote(remote.name, -1)"
-                    title="向上移动"
+                    :title="$t('ui.mount.moveUp')"
                   >
                     <ArrowUp class="action-icon" />
                   </button>
@@ -2286,7 +2380,7 @@ onUnmounted(() => {
                     class="icon-btn-action icon-btn-reorder"
                     :disabled="index === sortedRemotes.length - 1"
                     @click.stop="moveRemote(remote.name, 1)"
-                    title="向下移动"
+                    :title="$t('ui.mount.moveDown')"
                   >
                     <ArrowDown class="action-icon" />
                   </button>
@@ -2296,14 +2390,14 @@ onUnmounted(() => {
                   <button
                     class="icon-btn-action"
                     @click="openEditModal(remote)"
-                    title="修改此云端硬盘设置"
+                    :title="$t('ui.mount.editDriveTip')"
                   >
                     <Pencil class="action-icon" />
                   </button>
                   <button
                     class="icon-btn-delete"
                     @click="handleDeleteRemote(remote.name)"
-                    title="删除此云端设置"
+                    :title="$t('ui.mount.deleteDriveTip')"
                   >
                     <Trash2 class="trash-icon" />
                   </button>
@@ -2315,7 +2409,7 @@ onUnmounted(() => {
             <div class="card-body">
               <!-- Drive Letter -->
               <div class="setting-row">
-                <label class="field-label">盘符</label>
+                <label class="field-label">{{ $t('ui.mount.driveLetter') }}</label>
                 <div class="drive-select-wrapper">
                   <select
                     v-if="!remote.is_mounted"
@@ -2324,44 +2418,44 @@ onUnmounted(() => {
                     class="drive-select"
                   >
                     <option v-for="letter in availableDrives" :key="letter" :value="letter">
-                      磁盘 {{ letter }}
+                      {{ $t('ui.mount.disk', { letter }) }}
                     </option>
                     <option v-if="!availableDrives.includes(remoteConfigs[remote.name]?.driveLetter)" :value="remoteConfigs[remote.name]?.driveLetter">
-                      磁盘 {{ remoteConfigs[remote.name]?.driveLetter }}
+                      {{ $t('ui.mount.disk', { letter: remoteConfigs[remote.name]?.driveLetter }) }}
                     </option>
                   </select>
                   <div v-else class="drive-locked">
                     <HardDrive class="drive-letter-icon" />
-                    <span>磁盘 {{ remote.mounted_drive }}</span>
+                    <span>{{ $t('ui.mount.disk', { letter: remote.mounted_drive }) }}</span>
                   </div>
                 </div>
               </div>
 
               <!-- Volume Name -->
               <div class="setting-row" v-if="!remote.is_mounted">
-                <label class="field-label">硬盘显示名称</label>
+                <label class="field-label">{{ $t('ui.mount.volumeName') }}</label>
                 <input
                   type="text"
                   v-model="remoteConfigs[remote.name].volname"
                   @change="saveRemoteConfigs"
                   @blur="saveRemoteConfigs"
                   class="field-input"
-                  placeholder="资源管理器中显示的名称"
+                  :placeholder="$t('ui.mount.volumePlaceholder')"
                 />
               </div>
 
               <!-- Cache Mode -->
               <div class="setting-row" v-if="!remote.is_mounted">
-                <label class="field-label">缓存模式</label>
+                <label class="field-label">{{ $t('ui.mount.cacheMode') }}</label>
                 <select
                   v-model="remoteConfigs[remote.name].cacheMode"
                   @change="saveRemoteConfigs"
                   class="field-select"
                 >
-                  <option value="full">Full (推荐, 支持 Office/多数软件)</option>
-                  <option value="writes">Writes (仅写入缓存)</option>
-                  <option value="minimal">Minimal (最低缓存)</option>
-                  <option value="off">关闭 (只读或纯流式)</option>
+                  <option value="full">{{ $t('ui.mount.cacheFull') }}</option>
+                  <option value="writes">{{ $t('ui.mount.cacheWrites') }}</option>
+                  <option value="minimal">{{ $t('ui.mount.cacheMinimal') }}</option>
+                  <option value="off">{{ $t('ui.mount.cacheOff') }}</option>
                 </select>
               </div>
 
@@ -2369,17 +2463,17 @@ onUnmounted(() => {
               <div class="setting-row" v-if="!remote.is_mounted">
                 <div class="perf-preset-header">
                   <label class="field-label">
-                    <span>性能预设 (Preset)</span>
+                    <span>{{ $t('ui.mount.presetLabel') }}</span>
                   </label>
                   <button
                     type="button"
                     class="btn-toggle-adv"
                     :class="{ active: expandedAdvancedOpts[remote.name] }"
                     @click="toggleAdvancedOpts(remote.name)"
-                    title="展开/收合性能微调选项"
+                    :title="$t('ui.mount.toggleAdvTip')"
                   >
                     <SlidersHorizontal class="btn-adv-icon" />
-                    <span>{{ expandedAdvancedOpts[remote.name] ? '收合微调' : '微调参数' }}</span>
+                    <span>{{ expandedAdvancedOpts[remote.name] ? $t('ui.mount.collapseAdv') : $t('ui.mount.expandAdv') }}</span>
                     <ChevronDown class="btn-chevron-icon" :class="{ rotated: expandedAdvancedOpts[remote.name] }" />
                   </button>
                 </div>
@@ -2391,7 +2485,7 @@ onUnmounted(() => {
                     @click="applyPresetToRemote(remote.name, 'fast')"
                   >
                     <Zap class="pill-icon" />
-                    <span>极速推荐</span>
+                    <span>{{ $t('ui.mount.presetFast') }}</span>
                   </button>
                   <button
                     type="button"
@@ -2400,7 +2494,7 @@ onUnmounted(() => {
                     @click="applyPresetToRemote(remote.name, 'default')"
                   >
                     <Gauge class="pill-icon" />
-                    <span>官方平衡</span>
+                    <span>{{ $t('ui.mount.presetDefault') }}</span>
                   </button>
                   <button
                     type="button"
@@ -2409,20 +2503,14 @@ onUnmounted(() => {
                     @click="applyPresetToRemote(remote.name, 'custom')"
                   >
                     <Sliders class="pill-icon" />
-                    <span>自定义高级</span>
+                    <span>{{ $t('ui.mount.presetCustom') }}</span>
                   </button>
                 </div>
 
                 <div class="preset-hint-box" v-if="!expandedAdvancedOpts[remote.name]">
-                  <p v-if="(remoteConfigs[remote.name]?.mountPreset || 'fast') === 'fast'" class="hint-fast">
-                    ⚡ <b>极速推荐</b>：72h 长效目录缓存、10m 属性缓存、抑制 modtime 查找、50G 磁盘缓存与非阻塞后台预热，秒开零冻结！
-                  </p>
-                  <p v-else-if="remoteConfigs[remote.name]?.mountPreset === 'default'" class="hint-default">
-                    ⚖️ <b>官方平衡</b>：Rclone 官方默认行为 (5m 目录缓存、1s 属性超时、关闭后台预热)。
-                  </p>
-                  <p v-else class="hint-custom">
-                    🛠️ <b>自定义微调</b>：已应用各自的自定义缓存超时、切片大小或节流设置。
-                  </p>
+                  <p v-if="(remoteConfigs[remote.name]?.mountPreset || 'fast') === 'fast'" class="hint-fast" v-html="$t('ui.mount.hintFast')"></p>
+                  <p v-else-if="remoteConfigs[remote.name]?.mountPreset === 'default'" class="hint-default" v-html="$t('ui.mount.hintDefault')"></p>
+                  <p v-else class="hint-custom" v-html="$t('ui.mount.hintCustom')"></p>
                 </div>
               </div>
 
@@ -2433,59 +2521,59 @@ onUnmounted(() => {
               >
                 <div class="adv-panel-title">
                   <SlidersHorizontal class="panel-title-icon" />
-                  <span>目录、磁盘缓存与 Google Drive 节流微调</span>
+                  <span>{{ $t('ui.mount.advPanelTitle') }}</span>
                 </div>
 
                 <!-- 1. 目录与属性缓存 -->
-                <div class="adv-section-title">1. 目录与属性缓存（解决目录浏览卡顿）</div>
+                <div class="adv-section-title">{{ $t('ui.mount.advSection1') }}</div>
                 <div class="adv-grid">
                   <div class="adv-field">
-                    <label class="adv-label" title="--dir-cache-time">长效目录缓存</label>
+                    <label class="adv-label" title="--dir-cache-time">{{ $t('ui.mount.dirCacheTime') }}</label>
                     <select
                       v-model="remoteConfigs[remote.name].mountOptions.dirCacheTime"
                       @change="onCustomMountOptionChange(remote.name)"
                       class="adv-select"
                     >
-                      <option value="72h">72 小时 (推荐, 秒开目录)</option>
-                      <option value="24h">24 小时</option>
-                      <option value="7d">7 天 (极速静态)</option>
-                      <option value="1h">1 小时</option>
-                      <option value="5m">5 分钟 (Rclone 默认)</option>
+                      <option value="72h">{{ $t('ui.mount.dirCache72h') }}</option>
+                      <option value="24h">{{ $t('ui.mount.time24h') }}</option>
+                      <option value="7d">{{ $t('ui.mount.dirCache7d') }}</option>
+                      <option value="1h">{{ $t('ui.mount.time1h') }}</option>
+                      <option value="5m">{{ $t('ui.mount.dirCache5m') }}</option>
                     </select>
                   </div>
 
                   <div class="adv-field">
-                    <label class="adv-label" title="--poll-interval">远程变更轮询</label>
+                    <label class="adv-label" title="--poll-interval">{{ $t('ui.mount.pollLabel') }}</label>
                     <select
                       v-model="remoteConfigs[remote.name].mountOptions.pollInterval"
                       @change="onCustomMountOptionChange(remote.name)"
                       class="adv-select"
                     >
-                      <option value="1m">1 分钟 (推荐)</option>
-                      <option value="30s">30 秒 (高频同步)</option>
-                      <option value="5m">5 分钟</option>
-                      <option value="0">0 (禁用轮询)</option>
+                      <option value="1m">{{ $t('ui.mount.poll1m') }}</option>
+                      <option value="30s">{{ $t('ui.mount.poll30s') }}</option>
+                      <option value="5m">{{ $t('ui.mount.time5m') }}</option>
+                      <option value="0">{{ $t('ui.mount.pollOff') }}</option>
                     </select>
                   </div>
 
                   <div class="adv-field">
-                    <label class="adv-label" title="--attr-timeout">内核属性缓存超时</label>
+                    <label class="adv-label" title="--attr-timeout">{{ $t('ui.mount.attrLabel') }}</label>
                     <select
                       v-model="remoteConfigs[remote.name].mountOptions.attrTimeout"
                       @change="onCustomMountOptionChange(remote.name)"
                       class="adv-select"
                     >
-                      <option value="10m">10 分钟 (推荐, 防资源管理器假死)</option>
-                      <option value="5m">5 分钟</option>
-                      <option value="1h">1 小时</option>
-                      <option value="1s">1 秒 (Rclone 默认)</option>
+                      <option value="10m">{{ $t('ui.mount.attr10m') }}</option>
+                      <option value="5m">{{ $t('ui.mount.time5m') }}</option>
+                      <option value="1h">{{ $t('ui.mount.time1h') }}</option>
+                      <option value="1s">{{ $t('ui.mount.attr1s') }}</option>
                     </select>
                   </div>
 
                   <div class="adv-field-toggle">
                     <div class="toggle-info">
-                      <span class="adv-toggle-label" title="--no-modtime">抑制修改时间频繁查找 (--no-modtime)</span>
-                      <span class="adv-toggle-desc">避免资源管理器枚举时逐一读取远程 mtime，极大加速小文件目录加载</span>
+                      <span class="adv-toggle-label" title="--no-modtime">{{ $t('ui.mount.noModtimeLabel') }}</span>
+                      <span class="adv-toggle-desc">{{ $t('ui.mount.noModtimeDesc') }}</span>
                     </div>
                     <button
                       type="button"
@@ -2499,67 +2587,67 @@ onUnmounted(() => {
                 </div>
 
                 <!-- 2. VFS 磁盘缓存与切片 -->
-                <div class="adv-section-title">2. VFS 磁盘缓存与切片读取（解决点击/预览冻结）</div>
+                <div class="adv-section-title">{{ $t('ui.mount.advSection2') }}</div>
                 <div class="adv-grid">
                   <div class="adv-field">
-                    <label class="adv-label" title="--vfs-cache-max-size">磁盘缓存配额上限</label>
+                    <label class="adv-label" title="--vfs-cache-max-size">{{ $t('ui.mount.vfsCacheMaxSize') }}</label>
                     <select
                       v-model="remoteConfigs[remote.name].mountOptions.vfsCacheMaxSize"
                       @change="onCustomMountOptionChange(remote.name)"
                       class="adv-select"
                     >
-                      <option value="50G">50 GB (推荐, 流畅预览/播放)</option>
-                      <option value="20G">20 GB</option>
-                      <option value="100G">100 GB</option>
-                      <option value="off">无限制 (off)</option>
+                      <option value="50G">{{ $t('ui.mount.vfsSize50g') }}</option>
+                      <option value="20G">{{ $t('ui.mount.vfsSize20g') }}</option>
+                      <option value="100G">{{ $t('ui.mount.vfsSize100g') }}</option>
+                      <option value="off">{{ $t('ui.mount.vfsSizeOff') }}</option>
                     </select>
                   </div>
 
                   <div class="adv-field">
-                    <label class="adv-label" title="--vfs-cache-max-age">缓存文件保留上限</label>
+                    <label class="adv-label" title="--vfs-cache-max-age">{{ $t('ui.mount.vfsCacheMaxAge') }}</label>
                     <select
                       v-model="remoteConfigs[remote.name].mountOptions.vfsCacheMaxAge"
                       @change="onCustomMountOptionChange(remote.name)"
                       class="adv-select"
                     >
-                      <option value="24h">24 小时 (推荐)</option>
-                      <option value="48h">48 小时</option>
-                      <option value="7d">7 天</option>
-                      <option value="1h">1 小时</option>
+                      <option value="24h">{{ $t('ui.mount.vfsAge24h') }}</option>
+                      <option value="48h">{{ $t('ui.mount.vfsAge48h') }}</option>
+                      <option value="7d">{{ $t('ui.mount.time7d') }}</option>
+                      <option value="1h">{{ $t('ui.mount.time1h') }}</option>
                     </select>
                   </div>
 
                   <div class="adv-field">
-                    <label class="adv-label" title="--vfs-read-chunk-size">渐进式切片读取起始大小</label>
+                    <label class="adv-label" title="--vfs-read-chunk-size">{{ $t('ui.mount.chunkSize') }}</label>
                     <select
                       v-model="remoteConfigs[remote.name].mountOptions.vfsReadChunkSize"
                       @change="onCustomMountOptionChange(remote.name)"
                       class="adv-select"
                     >
-                      <option value="64M">64 MB (推荐)</option>
-                      <option value="32M">32 MB</option>
-                      <option value="128M">128 MB (原生)</option>
-                      <option value="0">0 (关闭切片)</option>
+                      <option value="64M">{{ $t('ui.mount.chunk64m') }}</option>
+                      <option value="32M">{{ $t('ui.mount.chunk32m') }}</option>
+                      <option value="128M">{{ $t('ui.mount.chunk128m') }}</option>
+                      <option value="0">{{ $t('ui.mount.chunkOff') }}</option>
                     </select>
                   </div>
 
                   <div class="adv-field">
-                    <label class="adv-label" title="--vfs-read-chunk-size-limit">切片翻倍上限</label>
+                    <label class="adv-label" title="--vfs-read-chunk-size-limit">{{ $t('ui.mount.chunkLimit') }}</label>
                     <select
                       v-model="remoteConfigs[remote.name].mountOptions.vfsReadChunkSizeLimit"
                       @change="onCustomMountOptionChange(remote.name)"
                       class="adv-select"
                     >
-                      <option value="1G">1 GB (推荐)</option>
-                      <option value="2G">2 GB</option>
-                      <option value="off">无上限 (off)</option>
+                      <option value="1G">{{ $t('ui.mount.limit1g') }}</option>
+                      <option value="2G">{{ $t('ui.mount.limit2g') }}</option>
+                      <option value="off">{{ $t('ui.mount.limitOff') }}</option>
                     </select>
                   </div>
 
                   <div class="adv-field-toggle">
                     <div class="toggle-info">
-                      <span class="adv-toggle-label" title="--drive-pacer-min-sleep 10ms --drive-pacer-burst 200">Google Drive Pacer 节流调优</span>
-                      <span class="adv-toggle-desc">将 API 间隔缩减至 10ms、突发量提升至 200，突破 Google Drive 默认 API 频率限制</span>
+                      <span class="adv-toggle-label" title="--drive-pacer-min-sleep 10ms --drive-pacer-burst 200">{{ $t('ui.mount.pacerLabel') }}</span>
+                      <span class="adv-toggle-desc">{{ $t('ui.mount.pacerDesc') }}</span>
                     </div>
                     <button
                       type="button"
@@ -2573,12 +2661,12 @@ onUnmounted(() => {
                 </div>
 
                 <!-- 3. 后台非阻塞预热与高级 Flags -->
-                <div class="adv-section-title">3. 后台预热与高级参数</div>
+                <div class="adv-section-title">{{ $t('ui.mount.advSection3') }}</div>
                 <div class="adv-grid">
                   <div class="adv-field-toggle">
                     <div class="toggle-info">
-                      <span class="adv-toggle-label">挂载后后台自动预热 (Warm-up)</span>
-                      <span class="adv-toggle-desc">挂载就绪后在后台自动非阻塞运行 vfs/refresh recursive=true，预先创建缓存避免初次点入文件夹等待</span>
+                      <span class="adv-toggle-label">{{ $t('ui.mount.warmupLabel') }}</span>
+                      <span class="adv-toggle-desc">{{ $t('ui.mount.warmupDesc') }}</span>
                     </div>
                     <button
                       type="button"
@@ -2591,13 +2679,13 @@ onUnmounted(() => {
                   </div>
 
                   <div class="adv-field adv-field-full">
-                    <label class="adv-label">自定义额外 Rclone 命令行参数 (CLI Flags)</label>
+                    <label class="adv-label">{{ $t('ui.mount.extraFlags') }}</label>
                     <input
                       type="text"
                       v-model="remoteConfigs[remote.name].mountOptions.extraFlags"
                       @input="onCustomMountOptionChange(remote.name)"
                       class="adv-input"
-                      placeholder="例如: --transfers 8 --buffer-size 32M"
+                      :placeholder="$t('ui.mount.extraFlagsPlaceholder')"
                     />
                   </div>
                 </div>
@@ -2609,7 +2697,7 @@ onUnmounted(() => {
                     @click="applyPresetToRemote(remote.name, 'fast')"
                   >
                     <Zap class="btn-icon" />
-                    <span>重置为极速推荐值</span>
+                    <span>{{ $t('ui.mount.resetToFast') }}</span>
                   </button>
                 </div>
               </div>
@@ -2617,14 +2705,14 @@ onUnmounted(() => {
               <!-- Mounted Status Badge -->
               <div class="mounted-perf-badge" v-if="remote.is_mounted">
                 <Zap class="perf-badge-icon" />
-                <span>挂载性能：{{ (remoteConfigs[remote.name]?.mountPreset || 'fast') === 'fast' ? '⚡ 极速推荐 (72h 缓存 + 后台预热)' : remoteConfigs[remote.name]?.mountPreset === 'default' ? '⚖️ 官方平衡' : '🛠️ 自定义高级' }}</span>
+                <span>{{ $t('ui.mount.perfBadge') }}{{ (remoteConfigs[remote.name]?.mountPreset || 'fast') === 'fast' ? $t('ui.mount.perfFast') : remoteConfigs[remote.name]?.mountPreset === 'default' ? $t('ui.mount.perfDefault') : $t('ui.mount.perfCustom') }}</span>
               </div>
 
               <div class="checkbox-row" @click="toggleRemoteAutoMount(remote.name)">
                 <div class="custom-checkbox" :class="{ checked: remoteConfigs[remote.name]?.autoMount }">
                   <Check v-if="remoteConfigs[remote.name]?.autoMount" class="check-icon" />
                 </div>
-                <span class="checkbox-label">开机自动挂载此磁盘</span>
+                <span class="checkbox-label">{{ $t('ui.mount.autoMountLabel') }}</span>
               </div>
             </div>
 
@@ -2634,30 +2722,30 @@ onUnmounted(() => {
                 <button
                   class="btn btn-emerald"
                   @click="openExplorer(remote.mounted_drive)"
-                  title="打开磁盘"
+                  :title="$t('ui.mount.openDriveTip')"
                 >
                   <FolderOpen class="btn-icon" />
-                  <span>打开资源管理器</span>
+                  <span>{{ $t('ui.mount.openExplorer') }}</span>
                 </button>
 
                 <button
                   class="btn btn-cache-refresh"
                   @click="vfsRefreshCache(remote.name)"
                   :disabled="refreshingCacheRemotes.has(remote.name)"
-                  title="强制刷新 VFS 目录缓存，让添加/删除的文件立即出现在磁盘中"
+                  :title="$t('ui.mount.refreshCacheTip')"
                 >
                   <FolderSync class="btn-icon" :class="{ 'spin-anim': refreshingCacheRemotes.has(remote.name) }" />
-                  <span>{{ refreshingCacheRemotes.has(remote.name) ? '刷新中...' : '刷新缓存' }}</span>
+                  <span>{{ refreshingCacheRemotes.has(remote.name) ? $t('ui.mount.refreshing') : $t('ui.mount.refreshCache') }}</span>
                 </button>
 
                 <button
                   class="btn btn-danger"
                   @click="unmountDrive(remote.name)"
                   :disabled="loadingRemotes.has(remote.name)"
-                  title="卸载此磁盘"
+                  :title="$t('ui.mount.unmountTip')"
                 >
                   <Power class="btn-icon" />
-                  <span>{{ loadingRemotes.has(remote.name) ? '正在卸载...' : '卸载' }}</span>
+                  <span>{{ loadingRemotes.has(remote.name) ? $t('ui.mount.unmounting') : $t('ui.mount.unmount') }}</span>
                 </button>
               </template>
 
@@ -2668,7 +2756,7 @@ onUnmounted(() => {
                   :disabled="loadingRemotes.has(remote.name) || isPrerequisiteMissing"
                 >
                   <Disc3 class="btn-icon" :class="{ 'spin-anim': loadingRemotes.has(remote.name) }" />
-                  <span>{{ loadingRemotes.has(remote.name) ? '正在挂载...' : '立即挂载' }}</span>
+                  <span>{{ loadingRemotes.has(remote.name) ? $t('ui.mount.mounting') : $t('ui.mount.mountNow') }}</span>
                 </button>
               </template>
             </div>
@@ -2680,11 +2768,11 @@ onUnmounted(() => {
           <div class="empty-icon-box">
             <Cloud class="empty-icon" />
           </div>
-          <h2>尚未设置任何云端空间</h2>
-          <p>点击下方按钮直接通过图形化引导添加您的第一个 Google Drive、OneDrive 或 WebDAV。</p>
+          <h2>{{ $t('ui.mount.emptyTitle') }}</h2>
+          <p>{{ $t('ui.mount.emptyDesc') }}</p>
           <button class="btn btn-primary btn-lg" @click="showAddRemoteModal = true">
             <PlusCircle class="btn-icon" />
-            <span>添加云端硬盘</span>
+            <span>{{ $t('ui.mount.addDrive') }}</span>
           </button>
         </div>
       </section>
@@ -2693,8 +2781,8 @@ onUnmounted(() => {
       <section v-if="activeTab === 'sync'" class="tab-pane">
         <div class="sub-bar">
           <div class="sub-title-group">
-            <h2>文件同步与差异比对 (RcloneView Plus)</h2>
-            <p>设置来源与目的路径，运行双向内容比对，支持状态筛选 (Display Filter)、单文件拷贝、选择传输与定时调度</p>
+            <h2>{{ $t('ui.sync.title') }}</h2>
+            <p>{{ $t('ui.sync.subtitle') }}</p>
           </div>
         </div>
 
@@ -2703,7 +2791,7 @@ onUnmounted(() => {
           <div class="setup-compact-header">
             <div class="setup-compact-title">
               <FolderSync class="card-title-icon" />
-              <span>任务路径与参数设置</span>
+              <span>{{ $t('ui.sync.setupTitle') }}</span>
             </div>
             <div class="setup-compact-actions">
               <button
@@ -2712,7 +2800,7 @@ onUnmounted(() => {
                 :disabled="syncForm.isChecking || syncForm.isRunning || isPrerequisiteMissing"
               >
                 <FileCheck class="btn-icon" :class="{ 'spin-anim': syncForm.isChecking }" />
-                <span>{{ syncForm.isChecking ? '比对中...' : '🔍 比对两端差异 (Check Diff)' }}</span>
+                <span>{{ syncForm.isChecking ? $t('ui.sync.checking') : $t('ui.sync.checkDiff') }}</span>
               </button>
 
               <button
@@ -2721,17 +2809,17 @@ onUnmounted(() => {
                 :disabled="syncForm.isRunning || syncForm.isChecking || isPrerequisiteMissing"
               >
                 <Play class="btn-icon" :class="{ 'spin-anim': syncForm.isRunning }" />
-                <span>{{ syncForm.isRunning ? '运行中...' : '⚡ 立即开始同步/备份' }}</span>
+                <span>{{ syncForm.isRunning ? $t('ui.sync.running') : $t('ui.sync.runNow') }}</span>
               </button>
 
               <button
                 class="btn btn-schedule"
                 @click="openScheduleFromSync"
                 :disabled="!syncForm.source || !syncForm.dest"
-                title="直接将此任务设置保存为后台定时调度"
+                :title="$t('ui.sync.scheduleTip')"
               >
                 <CalendarClock class="btn-icon" />
-                <span>🕒 直接加入调度任务</span>
+                <span>{{ $t('ui.sync.addToScheduler') }}</span>
               </button>
             </div>
           </div>
@@ -2741,15 +2829,15 @@ onUnmounted(() => {
             <!-- Source Input -->
             <div class="form-group-compact">
               <div class="field-label-row">
-                <label class="field-label">来源路径 (Source)</label>
+                <label class="field-label">{{ $t('ui.sync.sourceLabel') }}</label>
                 <div class="quick-links-group" v-if="remotes.length > 0">
-                  <span class="quick-link-label">快速云端:</span>
+                  <span class="quick-link-label">{{ $t('ui.sync.quickCloud') }}</span>
                   <button
                     v-for="r in remotes.slice(0, 3)"
                     :key="r.name"
                     class="btn-tag"
                     @click="pickRemoteDirect(r.name, 'source')"
-                    :title="`将来源设置为 ${r.name}:`"
+                    :title="$t('ui.sync.pickSourceTip', { name: r.name })"
                   >
                     {{ r.name }}:
                   </button>
@@ -2760,23 +2848,23 @@ onUnmounted(() => {
                   type="text"
                   v-model="syncForm.source"
                   class="modal-input"
-                  placeholder="例如：C:\同步文件夹 或 GDrive:Documents"
+                  :placeholder="$t('ui.sync.sourcePlaceholder')"
                 />
                 <button
                   class="btn btn-browse"
                   @click="pickLocalFolder('source')"
-                  title="从本机资源管理器浏览选择文件夹"
+                  :title="$t('ui.sync.browseLocalTip')"
                 >
                   <FolderOpen class="btn-icon" />
-                  <span>浏览本机</span>
+                  <span>{{ $t('ui.sync.browseLocal') }}</span>
                 </button>
                 <button
                   class="btn btn-browse-cloud"
                   @click="openCloudBrowseModal('source')"
-                  title="选择并深入浏览已创建的云端硬盘目录"
+                  :title="$t('ui.sync.browseCloudTip')"
                 >
                   <Cloud class="btn-icon" />
-                  <span>选择云端</span>
+                  <span>{{ $t('ui.sync.browseCloud') }}</span>
                 </button>
               </div>
             </div>
@@ -2787,17 +2875,17 @@ onUnmounted(() => {
               <div class="form-group-compact">
                 <div class="field-label-row">
                   <div class="dest-label-with-tag">
-                    <label class="field-label">目的路径 1 (主要 Destination)</label>
-                    <span class="badge-tag">主要</span>
+                    <label class="field-label">{{ $t('ui.sync.destMainLabel') }}</label>
+                    <span class="badge-tag">{{ $t('ui.sync.badgeMain') }}</span>
                   </div>
                   <div class="quick-links-group" v-if="remotes.length > 0">
-                    <span class="quick-link-label">快速云端:</span>
+                    <span class="quick-link-label">{{ $t('ui.sync.quickCloud') }}</span>
                     <button
                       v-for="r in remotes.slice(0, 3)"
                       :key="r.name"
                       class="btn-tag"
                       @click="pickRemoteDirect(r.name, 'dest')"
-                      :title="`将目的设置为 ${r.name}:`"
+                      :title="$t('ui.sync.pickDestTip', { name: r.name })"
                     >
                       {{ r.name }}:
                     </button>
@@ -2808,23 +2896,23 @@ onUnmounted(() => {
                     type="text"
                     v-model="syncForm.dest"
                     class="modal-input"
-                    placeholder="例如：D:\Backup 或 GDrive:Backup"
+                    :placeholder="$t('ui.sync.destPlaceholder')"
                   />
                   <button
                     class="btn btn-browse"
                     @click="pickLocalFolder('dest')"
-                    title="从本机资源管理器浏览选择文件夹"
+                    :title="$t('ui.sync.browseLocalTip')"
                   >
                     <FolderOpen class="btn-icon" />
-                    <span>浏览本机</span>
+                    <span>{{ $t('ui.sync.browseLocal') }}</span>
                   </button>
                   <button
                     class="btn btn-browse-cloud"
                     @click="openCloudBrowseModal('dest')"
-                    title="选择并深入浏览已创建的云端硬盘目录"
+                    :title="$t('ui.sync.browseCloudTip')"
                   >
                     <Cloud class="btn-icon" />
-                    <span>选择云端</span>
+                    <span>{{ $t('ui.sync.browseCloud') }}</span>
                   </button>
                 </div>
               </div>
@@ -2837,17 +2925,17 @@ onUnmounted(() => {
               >
                 <div class="field-label-row">
                   <div class="dest-label-with-tag">
-                    <label class="field-label">目的路径 {{ idx + 2 }} (其他远程/本机文件夹)</label>
-                    <span class="badge-tag badge-cyan">额外</span>
+                    <label class="field-label">{{ $t('ui.sync.destExtraLabel', { n: idx + 2 }) }}</label>
+                    <span class="badge-tag badge-cyan">{{ $t('ui.sync.badgeExtra') }}</span>
                   </div>
                   <div class="quick-links-group" v-if="remotes.length > 0">
-                    <span class="quick-link-label">快速云端:</span>
+                    <span class="quick-link-label">{{ $t('ui.sync.quickCloud') }}</span>
                     <button
                       v-for="r in remotes.slice(0, 3)"
                       :key="r.name"
                       class="btn-tag"
                       @click="pickRemoteDirect(r.name, 'extraDest', idx)"
-                      :title="`将此目的设置为 ${r.name}:`"
+                      :title="$t('ui.sync.pickExtraDestTip', { name: r.name })"
                     >
                       {{ r.name }}:
                     </button>
@@ -2858,31 +2946,31 @@ onUnmounted(() => {
                     type="text"
                     v-model="extra.path"
                     class="modal-input"
-                    :placeholder="`例如：E:\\Backup 或 OneDrive:Backup${idx + 2}`"
+                    :placeholder="$t('ui.sync.extraDestPlaceholder', { n: idx + 2 })"
                   />
                   <button
                     class="btn btn-browse"
                     @click="pickLocalFolder('extraDest', idx)"
-                    title="从本机资源管理器浏览选择文件夹"
+                    :title="$t('ui.sync.browseLocalTip')"
                   >
                     <FolderOpen class="btn-icon" />
-                    <span>浏览本机</span>
+                    <span>{{ $t('ui.sync.browseLocal') }}</span>
                   </button>
                   <button
                     class="btn btn-browse-cloud"
                     @click="openCloudBrowseModal('extraDest', idx)"
-                    title="选择并深入浏览已创建的云端硬盘目录"
+                    :title="$t('ui.sync.browseCloudTip')"
                   >
                     <Cloud class="btn-icon" />
-                    <span>选择云端</span>
+                    <span>{{ $t('ui.sync.browseCloud') }}</span>
                   </button>
                   <button
                     class="btn btn-danger-outline"
                     @click="removeExtraDestination(idx)"
-                    title="移除此目的地"
+                    :title="$t('ui.sync.removeDestTip')"
                   >
                     <Trash2 class="btn-icon" />
-                    <span>移除</span>
+                    <span>{{ $t('common.remove') }}</span>
                   </button>
                 </div>
               </div>
@@ -2895,10 +2983,10 @@ onUnmounted(() => {
                   @click="addExtraDestination"
                 >
                   <FolderPlus class="btn-icon" />
-                  <span>＋ 添加目的地 (Add Destination)</span>
+                  <span>{{ $t('ui.sync.addDestination') }}</span>
                 </button>
                 <span class="dest-count-hint" v-if="syncForm.extraDests && syncForm.extraDests.length > 0">
-                  目前共设置 {{ (syncForm.extraDests ? syncForm.extraDests.length : 0) + 1 }} 个同步目的地，运行时将依次传输至各目标位置。
+                  {{ $t('ui.sync.destCountHint', { count: (syncForm.extraDests ? syncForm.extraDests.length : 0) + 1 }) }}
                 </span>
               </div>
             </div>
@@ -2907,21 +2995,21 @@ onUnmounted(() => {
           <!-- Secondary Options Row (Action, Filters, Auto-Schedule) -->
           <div class="setup-options-row">
             <div class="option-item flex-2">
-              <label class="field-label-compact">任务模式</label>
+              <label class="field-label-compact">{{ $t('ui.sync.actionLabel') }}</label>
               <select v-model="syncForm.action" class="modal-input-compact">
-                <option value="copy">Copy (增量拷贝备份: 推荐！仅拷贝新文件/变更文件，不删除目标端文件)</option>
-                <option value="sync">Sync (单向镜像同步: 目标端文件会完全与来源一致)</option>
-                <option value="move">Move (移动传输: 文件成功拷贝到目标端后从来源端删除)</option>
+                <option value="copy">{{ $t('ui.sync.actionCopy') }}</option>
+                <option value="sync">{{ $t('ui.sync.actionSync') }}</option>
+                <option value="move">{{ $t('ui.sync.actionMove') }}</option>
               </select>
             </div>
 
             <div class="option-item flex-3">
-              <label class="field-label-compact">排除过滤 (Filter / Exclude)</label>
+              <label class="field-label-compact">{{ $t('ui.sync.filterLabel') }}</label>
               <input
                 type="text"
                 v-model="syncForm.excludeFilter"
                 class="modal-input-compact"
-                placeholder="例如：*.tmp, *.bak, thumbs.db, node_modules/**"
+                :placeholder="$t('ui.sync.filterPlaceholder')"
               />
             </div>
 
@@ -2930,7 +3018,7 @@ onUnmounted(() => {
                 <Check v-if="syncForm.autoAddToScheduler" class="check-icon" />
               </div>
               <span class="checkbox-label text-cyan font-medium text-xs">
-                同步成功后自动加入定时调度 (每 60 分钟)
+                {{ $t('ui.sync.autoScheduleLabel') }}
               </span>
             </div>
           </div>
@@ -2941,7 +3029,7 @@ onUnmounted(() => {
           <!-- Top Header: Compare Status & Reload -->
           <div class="rcloneview-header">
             <div class="rcloneview-title-group">
-              <h3 class="rcloneview-title">Compare (比对查看窗口)</h3>
+              <h3 class="rcloneview-title">{{ $t('ui.sync.compareTitle') }}</h3>
               <span v-if="syncForm.diffResult" class="rcloneview-count-badge">
                 All data retrieved ({{ syncForm.diffResult.items ? syncForm.diffResult.items.length : 0 }} / {{ syncForm.diffResult.items ? syncForm.diffResult.items.length : 0 }} compared)
               </span>
@@ -2951,33 +3039,33 @@ onUnmounted(() => {
                 v-if="syncForm.diffResult"
                 class="btn btn-xs btn-schedule-outline"
                 @click="openScheduleFromSync"
-                title="比对无误，直接将此任务创建为后台定时调度"
+                :title="$t('ui.sync.createScheduleTip')"
               >
                 <CalendarClock class="btn-icon-xs" />
-                <span>创建为调度任务</span>
+                <span>{{ $t('ui.sync.createSchedule') }}</span>
               </button>
               <button
                 class="btn btn-xs btn-outline"
                 @click="handleCheckDiff"
                 :disabled="syncForm.isChecking || !syncForm.source || !syncForm.dest"
-                title="重新比对两端文件夹内容"
+                :title="$t('ui.sync.reloadTip')"
               >
                 <RefreshCw class="btn-icon-xs" :class="{ 'spin-anim': syncForm.isChecking }" />
-                <span>{{ syncForm.isChecking ? '比对中...' : 'Reload (重新比对)' }}</span>
+                <span>{{ syncForm.isChecking ? $t('ui.sync.checking') : $t('ui.sync.reload') }}</span>
               </button>
             </div>
           </div>
 
           <!-- RcloneView Blue Path Indicator Bar (如 RcloneView 截屏之顶部路径条) -->
           <div class="rcloneview-path-header">
-            <div class="path-col path-src" :title="syncForm.source || '未设置来源路径'">
+            <div class="path-col path-src" :title="syncForm.source || $t('ui.sync.noSource')">
               <span class="path-star">⭐</span>
-              <span class="path-name">{{ syncForm.source || '请于上方指定来源路径 (Source)' }}</span>
+              <span class="path-name">{{ syncForm.source || $t('ui.sync.specifySource') }}</span>
               <Folder class="path-icon-right" />
             </div>
-            <div class="path-col path-dest" :title="syncForm.dest || '未设置目的路径'">
+            <div class="path-col path-dest" :title="syncForm.dest || $t('ui.sync.noDest')">
               <span class="path-triangle">☁️</span>
-              <span class="path-name">{{ syncForm.dest || '请于上方指定目的路径 (Destination)' }}</span>
+              <span class="path-name">{{ syncForm.dest || $t('ui.sync.specifyDest') }}</span>
               <Folder class="path-icon-right" />
             </div>
           </div>
@@ -2991,40 +3079,40 @@ onUnmounted(() => {
                 class="rv-toggle-btn toggle-src"
                 :class="{ active: syncForm.filterModes.source_only }"
                 @click="toggleFilterMode('source_only')"
-                title="来源独有 (待拷贝至目标端 ➡️)"
+                :title="$t('ui.sync.tipSourceOnly')"
               >
                 <ArrowRight class="rv-icon text-green" />
-                <span>来源独有 ({{ syncForm.diffResult?.total_source_files || 0 }})</span>
+                <span>{{ $t('ui.sync.sourceOnly', { count: syncForm.diffResult?.total_source_files || 0 }) }}</span>
               </button>
 
               <button
                 class="rv-toggle-btn toggle-dest"
                 :class="{ active: syncForm.filterModes.dest_only }"
                 @click="toggleFilterMode('dest_only')"
-                title="目标端多出 (⬅️)"
+                :title="$t('ui.sync.tipDestOnly')"
               >
                 <ArrowLeft class="rv-icon text-blue" />
-                <span>目标端多出 ({{ syncForm.diffResult?.total_dest_files || 0 }})</span>
+                <span>{{ $t('ui.sync.destOnly', { count: syncForm.diffResult?.total_dest_files || 0 }) }}</span>
               </button>
 
               <button
                 class="rv-toggle-btn toggle-eq"
                 :class="{ active: syncForm.filterModes.equal }"
                 @click="toggleFilterMode('equal')"
-                title="两端完全一致 (＝)"
+                :title="$t('ui.sync.tipEqual')"
               >
                 <Equal class="rv-icon text-neutral" />
-                <span>完全一致 ({{ syncForm.diffResult?.total_equal || 0 }})</span>
+                <span>{{ $t('ui.sync.equal', { count: syncForm.diffResult?.total_equal || 0 }) }}</span>
               </button>
 
               <button
                 class="rv-toggle-btn toggle-diff"
                 :class="{ active: syncForm.filterModes.different }"
                 @click="toggleFilterMode('different')"
-                title="文件内容或时间不同 (≠)"
+                :title="$t('ui.sync.tipDifferent')"
               >
                 <SlidersHorizontal class="rv-icon text-purple" />
-                <span>内容差异 ({{ syncForm.diffResult?.total_different || 0 }})</span>
+                <span>{{ $t('ui.sync.different', { count: syncForm.diffResult?.total_different || 0 }) }}</span>
               </button>
 
               <button
@@ -3032,10 +3120,10 @@ onUnmounted(() => {
                 class="rv-toggle-btn toggle-err"
                 :class="{ active: syncForm.filterModes.error }"
                 @click="toggleFilterMode('error')"
-                title="读取或哈希异常 (❗)"
+                :title="$t('ui.sync.tipError')"
               >
                 <AlertTriangle class="rv-icon text-red" />
-                <span>异常 ({{ syncForm.diffResult?.total_error || 0 }})</span>
+                <span>{{ $t('ui.sync.error', { count: syncForm.diffResult?.total_error || 0 }) }}</span>
               </button>
             </div>
 
@@ -3045,7 +3133,7 @@ onUnmounted(() => {
                 class="btn btn-sm btn-emerald"
                 @click="handleCopySelected"
                 :disabled="syncForm.selectedItems.size === 0 || syncForm.isCopyingSelected"
-                title="将勾选的文件从来源拷贝到目标端"
+                :title="$t('ui.sync.copySelectedTip')"
               >
                 <Copy class="btn-icon-xs" />
                 <span>Copy ➡️ ({{ syncForm.selectedItems.size }})</span>
@@ -3077,10 +3165,10 @@ onUnmounted(() => {
                       type="checkbox"
                       @change="toggleSelectAllVisible"
                       :checked="filteredDiffItems.length > 0 && filteredDiffItems.every(i => syncForm.selectedItems.has(i.path))"
-                      title="全选 / 取消全选可见项目"
+                      :title="$t('ui.sync.selectAllTip')"
                     />
                   </th>
-                  <th class="col-src-name">Name (来源端)</th>
+                  <th class="col-src-name">{{ $t('ui.sync.colSrcName') }}</th>
                   <th class="col-src-size">Size</th>
                   <th class="col-src-date">Date Modified</th>
 
@@ -3088,12 +3176,12 @@ onUnmounted(() => {
                   <th class="col-dir">Dir</th>
 
                   <!-- Destination Side Headers -->
-                  <th class="col-dst-name">Name (目标端)</th>
+                  <th class="col-dst-name">{{ $t('ui.sync.colDstName') }}</th>
                   <th class="col-dst-size">Size</th>
                   <th class="col-dst-date">Date Modified</th>
 
                   <!-- Quick Action Header -->
-                  <th class="col-act">操作</th>
+                  <th class="col-act">{{ $t('ui.sync.colActions') }}</th>
                 </tr>
               </thead>
 
@@ -3144,18 +3232,18 @@ onUnmounted(() => {
                   <!-- Center: Direction Symbol (like RcloneView middle icons) -->
                   <td class="col-dir" @click.stop>
                     <div class="dir-icon-badge" :class="item.status">
-                      <ArrowRight v-if="item.status === 'source_only'" class="dir-icon text-green" title="来源独有，待拷贝到目标端 ➡️" />
-                      <ArrowLeft v-else-if="item.status === 'dest_only'" class="dir-icon text-blue" title="目标端多出 ⬅️" />
-                      <SlidersHorizontal v-else-if="item.status === 'different'" class="dir-icon text-purple" title="两端内容或时间差异 ≠" />
-                      <Equal v-else-if="item.status === 'equal'" class="dir-icon text-neutral" title="两端完全一致 ＝" />
-                      <AlertTriangle v-else class="dir-icon text-red" title="异常 ❗" />
+                      <ArrowRight v-if="item.status === 'source_only'" class="dir-icon text-green" :title="$t('ui.sync.dirSourceOnly')" />
+                      <ArrowLeft v-else-if="item.status === 'dest_only'" class="dir-icon text-blue" :title="$t('ui.sync.dirDestOnly')" />
+                      <SlidersHorizontal v-else-if="item.status === 'different'" class="dir-icon text-purple" :title="$t('ui.sync.dirDifferent')" />
+                      <Equal v-else-if="item.status === 'equal'" class="dir-icon text-neutral" :title="$t('ui.sync.dirEqual')" />
+                      <AlertTriangle v-else class="dir-icon text-red" :title="$t('ui.sync.dirError')" />
                     </div>
                   </td>
 
                   <!-- Dest: Name -->
                   <td class="col-dst-name">
                     <div class="rv-file-entry" :class="{ 'entry-empty': item.status === 'source_only' }">
-                      <span v-if="item.status === 'source_only'" class="entry-placeholder">(目标端尚不存在此文件)</span>
+                      <span v-if="item.status === 'source_only'" class="entry-placeholder">{{ $t('ui.sync.notInDest') }}</span>
                       <template v-else>
                         <Folder v-if="item.path.endsWith('/')" class="entry-icon text-amber" />
                         <span class="entry-name" :title="item.path">{{ item.path }}</span>
@@ -3182,9 +3270,9 @@ onUnmounted(() => {
                       class="btn-row-action"
                       @click="handleCopySingleFile(item.path)"
                       :disabled="syncForm.isCopyingSelected"
-                      title="单独拷贝此文件至目标端"
+                      :title="$t('ui.sync.copySingleTip')"
                     >
-                      <span>拷贝 ➡️</span>
+                      <span>{{ $t('ui.sync.copyOne') }}</span>
                     </button>
                   </td>
                 </tr>
@@ -3196,7 +3284,7 @@ onUnmounted(() => {
                   <td colspan="9" class="rv-empty-cell">
                     <div class="rv-empty-box">
                       <CheckCircle2 class="empty-icon text-emerald" />
-                      <span>在目前筛选条件下没有符合的项目（请尝试打开其他 Display 筛选按钮或清除搜索条件）</span>
+                      <span>{{ $t('ui.sync.noMatchFilter') }}</span>
                     </div>
                   </td>
                 </tr>
@@ -3208,8 +3296,8 @@ onUnmounted(() => {
                   <td colspan="9" class="rv-empty-cell placeholder-height">
                     <div class="rv-empty-box">
                       <FileCheck class="empty-placeholder-icon text-cyan" />
-                      <h4>尚未运行差异比对</h4>
-                      <p>请设置好上方来源与目的路径后，点击上方「🔍 比对两端差异 (Check Diff)」按钮</p>
+                      <h4>{{ $t('ui.sync.noDiffTitle') }}</h4>
+                      <p>{{ $t('ui.sync.noDiffDesc') }}</p>
                     </div>
                   </td>
                 </tr>
@@ -3220,7 +3308,7 @@ onUnmounted(() => {
           <!-- RcloneView Classical Status Bar (如截屏底部之统计列) -->
           <div class="rcloneview-statusbar">
             <div class="status-left">
-              <span>来源项目: {{ syncForm.diffResult?.total_source_files || 0 }} 待同步</span>
+              <span>{{ $t('ui.sync.statusLeft', { count: syncForm.diffResult?.total_source_files || 0 }) }}</span>
             </div>
             <div class="status-center">
               <span class="selected-count-tag">
@@ -3228,17 +3316,17 @@ onUnmounted(() => {
               </span>
             </div>
             <div class="status-right">
-              <span>目标端多出: {{ syncForm.diffResult?.total_dest_files || 0 }} 个</span>
+              <span>{{ $t('ui.sync.statusRight', { count: syncForm.diffResult?.total_dest_files || 0 }) }}</span>
             </div>
           </div>
 
           <!-- Collapsible Task Log Drawer -->
           <details class="task-log-details" :open="Boolean(syncForm.taskLog)">
             <summary class="log-summary">
-              <span>实时运行记录与日志</span>
-              <span class="log-summary-hint">{{ syncForm.isRunning ? '（任务正在运行中...）' : '' }}</span>
+              <span>{{ $t('ui.sync.logTitle') }}</span>
+              <span class="log-summary-hint">{{ syncForm.isRunning ? $t('ui.sync.logRunning') : '' }}</span>
             </summary>
-            <pre class="log-content-pre">{{ syncForm.taskLog || '尚未运行任务，点击「立即开始同步/备份」或「Copy ➡️」即可查看进度。' }}</pre>
+            <pre class="log-content-pre">{{ syncForm.taskLog || $t('ui.sync.logEmpty') }}</pre>
           </details>
         </div>
       </section>
@@ -3247,12 +3335,12 @@ onUnmounted(() => {
       <section v-if="activeTab === 'scheduler'" class="tab-pane">
         <div class="sub-bar">
           <div class="sub-title-group">
-            <h2>后台定时调度任务</h2>
-            <p>即使关闭窗口，只要程序常驻在右下角 System Tray，调度就会在后台自动运行</p>
+            <h2>{{ $t('ui.tasks.title') }}</h2>
+            <p>{{ $t('ui.tasks.subtitle') }}</p>
           </div>
           <button class="btn btn-primary" @click="showAddTaskModal = true">
             <PlusCircle class="btn-icon" />
-            <span>添加调度任务</span>
+            <span>{{ $t('ui.tasks.addTask') }}</span>
           </button>
         </div>
 
@@ -3260,59 +3348,59 @@ onUnmounted(() => {
           <table class="task-table">
             <thead>
               <tr>
-                <th>状态</th>
-                <th>任务名称</th>
-                <th>来源路径</th>
-                <th>目的路径</th>
-                <th>模式</th>
-                <th>运行频率</th>
-                <th>上次运行</th>
-                <th>操作</th>
+                <th>{{ $t('ui.tasks.colStatus') }}</th>
+                <th>{{ $t('ui.tasks.colName') }}</th>
+                <th>{{ $t('ui.tasks.colSource') }}</th>
+                <th>{{ $t('ui.tasks.colDest') }}</th>
+                <th>{{ $t('ui.tasks.colMode') }}</th>
+                <th>{{ $t('ui.tasks.colFrequency') }}</th>
+                <th>{{ $t('ui.tasks.colLastRun') }}</th>
+                <th>{{ $t('ui.tasks.colActions') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="task in scheduledTasks" :key="task.id">
                 <td>
                   <span class="status-pill" :class="task.enabled ? 'pill-active' : 'pill-disabled'">
-                    {{ task.enabled ? (task.status || '待命') : '已禁用' }}
+                    {{ task.enabled ? $t('task.status.' + (task.status || 'idle')) : $t('ui.tasks.disabled') }}
                   </span>
                 </td>
                 <td class="font-bold">{{ task.name }}</td>
                 <td class="font-mono text-cyan">{{ task.source }}</td>
                 <td class="font-mono text-emerald">{{ task.dest }}</td>
-                <td>{{ task.action.toUpperCase() }}</td>
-                <td>每隔 {{ task.intervalMinutes }} 分钟</td>
-                <td>{{ task.lastRun || '从未运行' }}</td>
+                <td>{{ $t('task.action.' + (task.action || 'copy')) }}</td>
+                <td>{{ $t('ui.tasks.everyNMinutes', { n: task.intervalMinutes }) }}</td>
+                <td>{{ task.lastRun || $t('ui.tasks.neverRun') }}</td>
                 <td>
                   <div class="table-actions">
                     <button
                       class="btn btn-secondary btn-sm"
                       @click="executeTaskNow(task)"
-                      :disabled="task.status === '运行中...'"
-                      title="立即运行一次此调度任务"
+                      :disabled="task.status === 'running'"
+                      :title="$t('ui.tasks.runNowTip')"
                     >
                       <Play class="btn-icon" />
-                      <span>运行</span>
+                      <span>{{ $t('ui.tasks.run') }}</span>
                     </button>
                     <button
                       class="btn btn-secondary btn-sm"
                       @click="openEditTaskModal(task)"
-                      title="修改调度任务设置"
+                      :title="$t('ui.tasks.editTip')"
                     >
                       <Pencil class="btn-icon" />
-                      <span>修改</span>
+                      <span>{{ $t('ui.tasks.edit') }}</span>
                     </button>
                     <button
                       class="btn btn-secondary btn-sm"
                       @click="toggleTaskEnabled(task)"
-                      :title="task.enabled ? '暂停定时调度' : '启用定时调度'"
+                      :title="task.enabled ? $t('ui.tasks.pauseTip') : $t('ui.tasks.enableTip')"
                     >
-                      {{ task.enabled ? '禁用' : '启用' }}
+                      {{ task.enabled ? $t('ui.tasks.disable') : $t('ui.tasks.enable') }}
                     </button>
                     <button
                       class="btn btn-danger btn-sm"
                       @click="removeTask(task.id)"
-                      title="删除此调度任务"
+                      :title="$t('ui.tasks.deleteTip')"
                     >
                       <Trash2 class="btn-icon" />
                     </button>
@@ -3327,11 +3415,11 @@ onUnmounted(() => {
           <div class="empty-icon-box">
             <CalendarClock class="empty-icon" />
           </div>
-          <h2>目前没有任何定时调度任务</h2>
-          <p>设置定时备份任务，自动在后台把文件夹同步至 Google Drive、OneDrive 或 NAS。</p>
+          <h2>{{ $t('ui.tasks.emptyTitle') }}</h2>
+          <p>{{ $t('ui.tasks.emptyDesc') }}</p>
           <button class="btn btn-primary" @click="showAddTaskModal = true">
             <PlusCircle class="btn-icon" />
-            <span>创建第一个调度任务</span>
+            <span>{{ $t('ui.tasks.createFirst') }}</span>
           </button>
         </div>
       </section>
@@ -3340,8 +3428,8 @@ onUnmounted(() => {
       <section v-if="activeTab === 'webgui'" class="tab-pane">
         <div class="sub-bar">
           <div class="sub-title-group">
-            <h2>Rclone 官方原生 Web-GUI</h2>
-            <p>通过内置 Web 服务器提供官方完整版管理界面（资源管理器、图形仪表盘）</p>
+            <h2>{{ $t('ui.webgui.title') }}</h2>
+            <p>{{ $t('ui.webgui.subtitle') }}</p>
           </div>
           <div class="sub-actions">
             <button
@@ -3350,12 +3438,12 @@ onUnmounted(() => {
               @click="toggleWebGui"
             >
               <Power class="btn-icon" />
-              <span>{{ envStatus.webgui_running ? '停止 Web-GUI 服务' : '启动 Web-GUI 服务' }}</span>
+              <span>{{ envStatus.webgui_running ? $t('ui.webgui.stop') : $t('ui.webgui.start') }}</span>
             </button>
 
             <button class="btn btn-emerald" @click="openWebGuiInBrowser">
               <ExternalLink class="btn-icon" />
-              <span>以默认浏览器打开 (http://127.0.0.1:5572)</span>
+              <span>{{ $t('ui.webgui.openBrowser') }}</span>
             </button>
           </div>
         </div>
@@ -3369,11 +3457,11 @@ onUnmounted(() => {
           ></iframe>
           <div v-else class="webgui-placeholder">
             <Globe class="placeholder-icon" />
-            <h3>Web-GUI 服务尚未启动</h3>
-            <p>点击上方「启动 Web-GUI 服务」即可在此内嵌或通过浏览器进行操作。</p>
+            <h3>{{ $t('ui.webgui.notRunningTitle') }}</h3>
+            <p>{{ $t('ui.webgui.notRunningDesc') }}</p>
             <button class="btn btn-primary btn-lg" @click="toggleWebGui">
               <Power class="btn-icon" />
-              <span>立即启动 Web-GUI 服务器</span>
+              <span>{{ $t('ui.webgui.startNow') }}</span>
             </button>
           </div>
         </div>
@@ -3386,16 +3474,16 @@ onUnmounted(() => {
         <div class="modal-header">
           <div class="modal-title">
             <PlusCircle class="modal-title-icon" />
-            <span>添加云端硬盘连接 (图形向导)</span>
+            <span>{{ $t('ui.remote.addTitle') }}</span>
           </div>
           <div class="modal-header-actions">
             <button
               class="btn btn-secondary btn-sm"
               @click="handleOpenRcloneTerminal"
-              title="打开 Windows 命令提示符运行 rclone config 原版交互设置"
+              :title="$t('ui.remote.terminalTip')"
             >
               <Terminal class="btn-icon" />
-              <span>原版终端向导 (rclone config)</span>
+              <span>{{ $t('ui.remote.terminal') }}</span>
             </button>
             <button class="close-btn" @click="showAddRemoteModal = false">
               <X class="close-icon" />
@@ -3405,20 +3493,20 @@ onUnmounted(() => {
 
         <div class="modal-body">
           <div class="setting-group">
-            <label class="group-title">云端硬盘名称 (Remote Name)</label>
+            <label class="group-title">{{ $t('ui.remote.nameLabel') }}</label>
             <input
               type="text"
               v-model="newRemoteForm.name"
               class="modal-input"
-              placeholder="例如：MyGoogleDrive, MyS3Storage, HomeNAS"
+              :placeholder="$t('ui.remote.namePlaceholder')"
             />
-            <span class="field-hint">供本机识别与挂载的唯一名称，不可包含特殊字符。</span>
+            <span class="field-hint">{{ $t('ui.remote.nameHint') }}</span>
           </div>
 
           <div class="setting-group">
             <div class="flex-between mb-1">
-              <label class="group-title">云端服务类型 (Storage Provider)</label>
-              <span class="text-xs text-muted">内置 60+ 种云端服务，并提供大陆网盘预设</span>
+              <label class="group-title">{{ $t('ui.remote.providerLabel') }}</label>
+              <span class="text-xs text-muted">{{ $t('ui.remote.providerHint') }}</span>
             </div>
             <!-- Provider Filter / Search -->
             <div class="search-input-wrapper mb-2">
@@ -3427,7 +3515,7 @@ onUnmounted(() => {
                 type="text"
                 v-model="newRemoteForm.searchProvider"
                 class="modal-input search-input"
-                placeholder="快速过滤云端服务（例如：百度, 阿里云盘, 115, pikpak, s3, drive...）"
+                :placeholder="$t('ui.remote.searchPlaceholder')"
               />
               <button
                 v-if="newRemoteForm.searchProvider"
@@ -3441,8 +3529,8 @@ onUnmounted(() => {
             <select v-model="newRemoteForm.type" class="modal-input" @change="onNewRemoteTypeChange">
               <optgroup
                 v-for="cat in filteredStorageCategories"
-                :key="cat.category"
-                :label="cat.category"
+                :key="cat.id"
+                :label="cat.label"
               >
                 <option v-for="it in cat.items" :key="it.type" :value="it.type">
                   {{ it.name }}
@@ -3450,7 +3538,7 @@ onUnmounted(() => {
               </optgroup>
               <optgroup
                 v-if="allOtherRcloneProviders.length > 0"
-                :label="'更多 Rclone 原版存储提供商 (' + allOtherRcloneProviders.length + ' 种)'"
+                :label="$t('ui.remote.moreProviders', { count: allOtherRcloneProviders.length })"
               >
                 <option v-for="p in allOtherRcloneProviders" :key="p.Prefix" :value="p.Prefix">
                   {{ p.Description || p.Name }} ({{ p.Prefix }})
@@ -3463,27 +3551,27 @@ onUnmounted(() => {
           <div v-if="isOAuthType(newRemoteForm.type)" class="info-box">
             <div class="info-title">
               <Info class="info-icon text-cyan" />
-              <span class="text-cyan font-bold">浏览器 OAuth 授权登录</span>
+              <span class="text-cyan font-bold">{{ $t('ui.remote.oauthTitle') }}</span>
             </div>
             <p class="group-desc">
-              点击下方「立即创建」后，系统将自动于您的默认浏览器中打开官方登录授权页面。<br />
-              在浏览器登录授权成功后即完成连接，完全无需繁琐设置！
+              {{ $t('ui.remote.oauthDesc1') }}<br />
+              {{ $t('ui.remote.oauthDesc2') }}
             </p>
             <!-- Optional Advanced OAuth Client ID / Secret -->
             <details class="advanced-details mt-2">
-              <summary class="advanced-summary">高级自定义 Client ID / Secret (选填)</summary>
+              <summary class="advanced-summary">{{ $t('ui.remote.advancedOAuth') }}</summary>
               <div class="setting-group mt-2">
                 <input
                   type="text"
                   v-model="newRemoteForm.clientId"
                   class="modal-input"
-                  placeholder="自定义 Client ID (留空使用官方默认)"
+                  :placeholder="$t('ui.remote.clientIdPlaceholder')"
                 />
                 <input
                   type="password"
                   v-model="newRemoteForm.clientSecret"
                   class="modal-input mt-2"
-                  placeholder="自定义 Client Secret (留空使用官方默认)"
+                  :placeholder="$t('ui.remote.clientSecretPlaceholder')"
                 />
               </div>
             </details>
@@ -3495,51 +3583,50 @@ onUnmounted(() => {
             <div class="info-box s3-alert">
               <div class="info-title">
                 <ShieldCheck class="info-icon text-amber" />
-                <span class="font-bold text-amber">AWS S3 / 对象存储认证说明 (密钥直连)</span>
+                <span class="font-bold text-amber">{{ $t('ui.remote.s3AuthTitle') }}</span>
               </div>
               <p class="group-desc">
-                💡 <b>S3 采用密钥直接认证</b>：S3 与兼容云端服务通过 API 的 <code>Access Key ID</code> 与 <code>Secret Access Key</code> 进行授权，创建时<b>不会也不需要打开浏览器跳转页面</b>！请填写下方密钥后点击「立即创建」即可连接。<br/>
-                若您使用的是 AWS SSO、IAM Identity Center 或需引导式问答，可点击右上角「⚡ 原版终端向导」。
+                <span v-html="$t('ui.remote.s3AuthDesc')"></span>
               </p>
             </div>
 
             <div class="setting-group">
-              <label class="group-title">S3 存储子类型 (S3 Provider)</label>
+              <label class="group-title">{{ $t('ui.remote.s3ProviderLabel') }}</label>
               <select
                 :value="newRemoteForm.s3Provider"
                 @change="onS3ProviderSelect(newRemoteForm, $event.target.value)"
                 class="modal-input"
               >
                 <option v-for="sp in S3_PROVIDERS" :key="sp.value" :value="sp.value">
-                  {{ sp.label }}
+                  {{ $t(sp.labelKey) }}
                 </option>
               </select>
             </div>
 
             <div class="setting-group">
-              <label class="group-title">访问密钥 ID (Access Key ID)</label>
+              <label class="group-title">{{ $t('ui.remote.s3AccessKeyLabel') }}</label>
               <input
                 type="text"
                 v-model="newRemoteForm.s3AccessKey"
                 class="modal-input font-mono"
-                placeholder="例如：AKIAIOSFODNN7EXAMPLE"
+                :placeholder="$t('ui.remote.s3AccessKeyPlaceholder')"
               />
             </div>
 
             <div class="setting-group">
-              <label class="group-title">私密密钥 (Secret Access Key)</label>
+              <label class="group-title">{{ $t('ui.remote.s3SecretKeyLabel') }}</label>
               <div class="password-wrapper">
                 <input
                   :type="newRemoteForm.showSecretKey ? 'text' : 'password'"
                   v-model="newRemoteForm.s3SecretKey"
                   class="modal-input font-mono pr-10"
-                  placeholder="例如：wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                  :placeholder="$t('ui.remote.s3SecretKeyPlaceholder')"
                 />
                 <button
                   type="button"
                   class="toggle-eye-btn"
                   @click="newRemoteForm.showSecretKey = !newRemoteForm.showSecretKey"
-                  :title="newRemoteForm.showSecretKey ? '隐藏密钥' : '显示密钥'"
+                  :title="newRemoteForm.showSecretKey ? $t('ui.remote.hideSecret') : $t('ui.remote.showSecret')"
                 >
                   <EyeOff v-if="newRemoteForm.showSecretKey" class="eye-icon" />
                   <Eye v-else class="eye-icon" />
@@ -3549,37 +3636,37 @@ onUnmounted(() => {
 
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">服务区域 (Region)</label>
+                <label class="group-title">{{ $t('ui.remote.regionLabel') }}</label>
                 <input
                   type="text"
                   v-model="newRemoteForm.s3Region"
                   class="modal-input font-mono"
-                  placeholder="例如：us-east-1, ap-northeast-1, auto"
+                  :placeholder="$t('ui.remote.regionPlaceholder')"
                 />
               </div>
 
               <div class="setting-group">
-                <label class="group-title">端点网址 (Endpoint URL)</label>
+                <label class="group-title">{{ $t('ui.remote.endpointLabel') }}</label>
                 <input
                   type="text"
                   v-model="newRemoteForm.s3Endpoint"
                   class="modal-input font-mono"
-                  placeholder="AWS 官方可留空；自建或 Cloudflare R2 请输入完整网址"
+                  :placeholder="$t('ui.remote.endpointPlaceholder')"
                 />
               </div>
             </div>
 
             <!-- S3 Advanced Options -->
             <details class="advanced-details mt-2">
-              <summary class="advanced-summary">高级 S3 选项 (路径样式 / IAM)</summary>
+              <summary class="advanced-summary">{{ $t('ui.remote.s3Advanced') }}</summary>
               <div class="setting-group mt-2">
                 <label class="checkbox-label">
                   <input type="checkbox" v-model="newRemoteForm.s3ForcePathStyle" />
-                  <span>强制路径样式 (Force Path Style) — <i>MinIO、Ceph 或自建 S3 通常需勾选</i></span>
+                  <span v-html="$t('ui.remote.s3PathStyle')"></span>
                 </label>
                 <label class="checkbox-label mt-1">
                   <input type="checkbox" v-model="newRemoteForm.s3EnvAuth" />
-                  <span>从环境变量或 AWS IAM 角色读取凭证 (Env Auth)</span>
+                  <span>{{ $t('ui.remote.s3EnvAuth') }}</span>
                 </label>
               </div>
             </details>
@@ -3593,11 +3680,11 @@ onUnmounted(() => {
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">用户名</label>
+                <label class="group-title">{{ $t('ui.remote.username') }}</label>
                 <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="Username" />
               </div>
               <div class="setting-group">
-                <label class="group-title">密码 / 应用程序密码</label>
+                <label class="group-title">{{ $t('ui.remote.passwordOrApp') }}</label>
                 <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="Password" />
               </div>
             </div>
@@ -3608,21 +3695,20 @@ onUnmounted(() => {
             <div class="info-box">
               <div class="info-title">
                 <Info class="info-icon text-cyan" />
-                <span class="text-cyan font-bold">PikPak 原生直连（账号密码）</span>
+                <span class="text-cyan font-bold">{{ $t('ui.remote.pikpakTitle') }}</span>
               </div>
               <p class="group-desc">
-                由 rclone 原生 PikPak 后端直连，<b>不会打开浏览器</b>。请填写注册邮箱 / 手机号与密码；如账号开启了额外验证，请先在 PikPak 官网确认可正常登录。<br />
-                该后端自 rclone v1.63 起提供，版本过旧时请先升级 rclone。
+                <span v-html="$t('ui.remote.pikpakDesc')"></span>
               </p>
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">账号 (邮箱 / 手机号)</label>
+                <label class="group-title">{{ $t('ui.remote.accountLabel') }}</label>
                 <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="your-account@example.com" />
               </div>
               <div class="setting-group">
-                <label class="group-title">密码</label>
-                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="PikPak 登录密码" />
+                <label class="group-title">{{ $t('ui.remote.password') }}</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.pikpakPasswordPlaceholder')" />
               </div>
             </div>
           </template>
@@ -3632,25 +3718,24 @@ onUnmounted(() => {
             <div class="info-box">
               <div class="info-title">
                 <Info class="info-icon text-cyan" />
-                <span class="text-cyan font-bold">坚果云 WebDAV（应用密码）</span>
+                <span class="text-cyan font-bold">{{ $t('ui.remote.nutstoreTitle') }}</span>
               </div>
               <p class="group-desc">
-                服务器地址固定为 <code>https://dav.jianguoyun.com/dav/</code>，直接使用坚果云 WebDAV 接口，无需额外部署。<br />
-                获取密码：登录坚果云网页版 ➔ 右上角账户 ➔「安全选项」➔「添加应用」➔ 生成<b>应用密码</b>（网页登录密码不可用于 WebDAV）。
+                <span v-html="$t('ui.remote.nutstoreDesc')"></span>
               </p>
             </div>
             <div class="setting-group">
-              <label class="group-title">服务器地址 (固定)</label>
+              <label class="group-title">{{ $t('ui.remote.serverFixed') }}</label>
               <input type="text" class="modal-input font-mono" value="https://dav.jianguoyun.com/dav/" disabled />
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">坚果云账号 (邮箱)</label>
+                <label class="group-title">{{ $t('ui.remote.nutstoreAccount') }}</label>
                 <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="your-account@example.com" />
               </div>
               <div class="setting-group">
-                <label class="group-title">应用密码</label>
-                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="在坚果云「安全选项」中生成" />
+                <label class="group-title">{{ $t('ui.remote.appPassword') }}</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.nutstorePasswordPlaceholder')" />
               </div>
             </div>
           </template>
@@ -3660,25 +3745,24 @@ onUnmounted(() => {
             <div class="info-box">
               <div class="info-title">
                 <Info class="info-icon text-cyan" />
-                <span class="text-cyan font-bold">123 云盘官方 WebDAV（会员功能）</span>
+                <span class="text-cyan font-bold">{{ $t('ui.remote.pan123Title') }}</span>
               </div>
               <p class="group-desc">
-                服务器地址固定为 <code>https://webdav.123pan.cn/webdav</code>。WebDAV 属于 123 云盘 VIP / SVIP 会员权益，请先在会员中心确认已开通。<br />
-                获取密码：登录 123 云盘网页版 ➔ 工具中心 ➔「第三方挂载」➔ 添加应用 ➔ 生成 8 位<b>应用密码</b>（可限定目录与读写权限，登录密码不可用）。
+                <span v-html="$t('ui.remote.pan123Desc')"></span>
               </p>
             </div>
             <div class="setting-group">
-              <label class="group-title">服务器地址 (固定)</label>
+              <label class="group-title">{{ $t('ui.remote.serverFixed') }}</label>
               <input type="text" class="modal-input font-mono" value="https://webdav.123pan.cn/webdav" disabled />
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">123 云盘账号 (手机号 / 邮箱)</label>
+                <label class="group-title">{{ $t('ui.remote.pan123Account') }}</label>
                 <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="13800000000" />
               </div>
               <div class="setting-group">
-                <label class="group-title">应用密码</label>
-                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="8 位应用密码" />
+                <label class="group-title">{{ $t('ui.remote.appPassword') }}</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.pan123PasswordPlaceholder')" />
               </div>
             </div>
           </template>
@@ -3688,32 +3772,30 @@ onUnmounted(() => {
             <div class="info-box">
               <div class="info-title">
                 <Info class="info-icon text-amber" />
-                <span class="font-bold text-amber">通过 OpenList / AList 挂载百度网盘、阿里云盘、夸克、115 等</span>
+                <span class="font-bold text-amber">{{ $t('ui.remote.openlistTitle') }}</span>
               </div>
               <p class="group-desc">
-                官方 rclone 未内置百度网盘、阿里云盘、夸克网盘、115、123 云盘、天翼云盘、迅雷云盘的私有协议，本项目统一通过
-                <b>OpenList / AList 的 WebDAV 接口</b>挂载，可同时聚合多个网盘。<br />
-                <b>使用步骤：</b>① 部署并启动 OpenList（或 AList）；② 在 OpenList 后台「存储」中添加对应网盘账号；③ 在 OpenList 后台开启
-                WebDAV（默认路径 <code>/dav</code>，端口 <code>5244</code>）；④ 回到此处填写 WebDAV 地址与 OpenList 账号密码即可挂载。
+                <span v-html="$t('ui.remote.openlistDesc1')"></span>
+                <span v-html="$t('ui.remote.openlistDesc2')"></span>
               </p>
               <p class="group-desc">
-                OpenList 项目：
+                {{ $t('ui.remote.openlistProject') }}
                 <a href="#" @click.prevent="openUrl('https://github.com/OpenListTeam/OpenList')" class="text-cyan">github.com/OpenListTeam/OpenList</a>
               </p>
             </div>
             <div class="setting-group">
-              <label class="group-title">OpenList WebDAV 地址</label>
+              <label class="group-title">{{ $t('ui.remote.openlistUrlLabel') }}</label>
               <input type="text" v-model="newRemoteForm.url" class="modal-input font-mono" placeholder="http://192.168.1.10:5244/dav" />
-              <span class="field-hint">须包含 /dav 路径；局域网可用 http，公网访问建议使用 https 域名。</span>
+              <span class="field-hint">{{ $t('ui.remote.openlistUrlHint') }}</span>
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">OpenList 用户名</label>
+                <label class="group-title">{{ $t('ui.remote.openlistUser') }}</label>
                 <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="admin" />
               </div>
               <div class="setting-group">
-                <label class="group-title">OpenList 密码</label>
-                <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="OpenList 登录密码" />
+                <label class="group-title">{{ $t('ui.remote.openlistPassword') }}</label>
+                <input type="password" v-model="newRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.openlistPasswordPlaceholder')" />
               </div>
             </div>
           </template>
@@ -3722,26 +3804,26 @@ onUnmounted(() => {
           <template v-if="newRemoteForm.type === 'smb'">
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">服务器主机位置 (Host)</label>
-                <input type="text" v-model="newRemoteForm.host" class="modal-input" placeholder="192.168.1.100 或 nas.local" />
+                <label class="group-title">{{ $t('ui.remote.smbHost') }}</label>
+                <input type="text" v-model="newRemoteForm.host" class="modal-input" :placeholder="$t('ui.remote.smbHostPlaceholder')" />
               </div>
               <div class="setting-group">
-                <label class="group-title">连接端口 (Port)</label>
+                <label class="group-title">{{ $t('ui.remote.portLabel') }}</label>
                 <input type="text" v-model="newRemoteForm.port" class="modal-input" placeholder="445" />
               </div>
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">用户名 (User)</label>
+                <label class="group-title">{{ $t('ui.remote.smbUser') }}</label>
                 <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="Username" />
               </div>
               <div class="setting-group">
-                <label class="group-title">密码 (Password)</label>
+                <label class="group-title">{{ $t('ui.remote.smbPassword') }}</label>
                 <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="Password" />
               </div>
             </div>
             <div class="setting-group">
-              <label class="group-title">域名名称 (Domain，选填)</label>
+              <label class="group-title">{{ $t('ui.remote.smbDomain') }}</label>
               <input type="text" v-model="newRemoteForm.domain" class="modal-input" placeholder="WORKGROUP" />
             </div>
           </template>
@@ -3750,28 +3832,28 @@ onUnmounted(() => {
           <template v-if="newRemoteForm.type === 'ftp' || newRemoteForm.type === 'sftp'">
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">主机位置 (Host)</label>
-                <input type="text" v-model="newRemoteForm.host" class="modal-input" placeholder="192.168.1.100 或 ftp.example.com" />
+                <label class="group-title">{{ $t('ui.remote.hostLabel') }}</label>
+                <input type="text" v-model="newRemoteForm.host" class="modal-input" :placeholder="$t('ui.remote.hostPlaceholder')" />
               </div>
               <div class="setting-group">
-                <label class="group-title">连接端口 (Port)</label>
+                <label class="group-title">{{ $t('ui.remote.portLabel') }}</label>
                 <input type="text" v-model="newRemoteForm.port" class="modal-input" :placeholder="newRemoteForm.type === 'sftp' ? '22' : '21'" />
               </div>
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">用户账号</label>
+                <label class="group-title">{{ $t('ui.remote.userAccount') }}</label>
                 <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="Username" />
               </div>
               <div class="setting-group">
-                <label class="group-title">密码</label>
+                <label class="group-title">{{ $t('ui.remote.password') }}</label>
                 <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="Password" />
               </div>
             </div>
             <div class="setting-group">
-              <label class="group-title">访问目录 (远程路径，选填)</label>
-              <input type="text" v-model="newRemoteForm.remotePath" class="modal-input" placeholder="例如：/data（服务器绝对路径；留空则使用默认目录 /root）" />
-              <p class="group-desc">填写服务器上的绝对路径，将直接挂载该目录（如 /data 对应服务器 /data，而非 /root/data）</p>
+              <label class="group-title">{{ $t('ui.remote.remotePathLabel') }}</label>
+              <input type="text" v-model="newRemoteForm.remotePath" class="modal-input" :placeholder="$t('ui.remote.remotePathPlaceholder')" />
+              <p class="group-desc">{{ $t('ui.remote.remotePathDesc') }}</p>
             </div>
           </template>
 
@@ -3802,18 +3884,18 @@ onUnmounted(() => {
           <!-- Mega / ProtonDrive -->
           <template v-if="newRemoteForm.type === 'mega' || newRemoteForm.type === 'protondrive'">
             <div class="setting-group">
-              <label class="group-title">账号 (Email)</label>
+              <label class="group-title">{{ $t('ui.remote.emailAccount') }}</label>
               <input type="text" v-model="newRemoteForm.user" class="modal-input" placeholder="your-email@example.com" />
             </div>
             <div class="setting-group">
-              <label class="group-title">密码</label>
+              <label class="group-title">{{ $t('ui.remote.password') }}</label>
               <input type="password" v-model="newRemoteForm.pass" class="modal-input" placeholder="Password" />
             </div>
           </template>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showAddRemoteModal = false">取消</button>
+          <button class="btn btn-secondary" @click="showAddRemoteModal = false">{{ $t('common.cancel') }}</button>
           <button
             class="btn btn-primary"
             @click="submitAddRemote"
@@ -3821,10 +3903,10 @@ onUnmounted(() => {
           >
             <Disc3 class="btn-icon" :class="{ 'spin-anim': newRemoteForm.isCreating }" />
             <span v-if="newRemoteForm.isCreating">
-              {{ isOAuthType(newRemoteForm.type) ? '创建中 (请在浏览器完成授权)...' : '正在连接创建中...' }}
+              {{ isOAuthType(newRemoteForm.type) ? $t('ui.remote.creatingOAuth') : $t('ui.remote.creating') }}
             </span>
             <span v-else>
-              {{ isOAuthType(newRemoteForm.type) ? '🚀 立即创建 (将打开浏览器授权)' : (newRemoteForm.type === 's3' ? '🚀 立即创建 S3 连接' : '🚀 立即创建') }}
+              {{ isOAuthType(newRemoteForm.type) ? $t('ui.remote.createOAuth') : (newRemoteForm.type === 's3' ? $t('ui.remote.createS3') : $t('ui.remote.create')) }}
             </span>
           </button>
         </div>
@@ -3837,7 +3919,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <div class="modal-title">
             <Pencil class="modal-title-icon" />
-            <span>修改云端设置: {{ editRemoteForm.newName || editRemoteForm.name }}</span>
+            <span>{{ $t('ui.remote.editTitle', { name: editRemoteForm.newName || editRemoteForm.name }) }}</span>
           </div>
           <button class="close-btn" @click="showEditRemoteModal = false">
             <X class="close-icon" />
@@ -3846,29 +3928,29 @@ onUnmounted(() => {
 
         <div class="modal-body">
           <div class="setting-group">
-            <label class="group-title">云端硬盘名称 (Remote Name)</label>
+            <label class="group-title">{{ $t('ui.remote.nameLabel') }}</label>
             <input
               type="text"
               v-model="editRemoteForm.newName"
               class="modal-input font-bold"
-              placeholder="例如：xVideo"
+              :placeholder="$t('ui.remote.editNamePlaceholder')"
             />
-            <span class="field-hint">可直接修改名称，保存后挂载盘符与设置将自动平移。</span>
+            <span class="field-hint">{{ $t('ui.remote.editNameHint') }}</span>
           </div>
 
           <div class="setting-group">
-            <label class="group-title">服务类型</label>
-            <div class="text-cyan font-bold">{{ getProviderDetails(editRemoteForm.type, editRemoteForm.description).name }} ({{ editRemoteForm.type }})</div>
+            <label class="group-title">{{ $t('ui.remote.typeLabel') }}</label>
+            <div class="text-cyan font-bold">{{ providerDetailName(editRemoteForm.type, editRemoteForm.description) }} ({{ editRemoteForm.type }})</div>
           </div>
 
           <!-- OAuth Re-authenticate for Drive / OneDrive -->
           <div v-if="editRemoteForm.type.includes('drive') || editRemoteForm.type.includes('onedrive')" class="setting-group info-box">
             <div class="info-title">
               <KeyRound class="info-icon" />
-              <span>云端账号登录授权</span>
+              <span>{{ $t('ui.remote.reauthTitle') }}</span>
             </div>
             <p class="group-desc">
-              若遇到凭证过期或无法访问，点击下方按钮即可重新在默认浏览器中进行 OAuth 账号登录授权。
+              {{ $t('ui.remote.reauthDesc') }}
             </p>
             <button
               class="btn btn-emerald mt-2"
@@ -3876,36 +3958,36 @@ onUnmounted(() => {
               :disabled="editRemoteForm.isReconnecting"
             >
               <RotateCw class="btn-icon" :class="{ 'spin-anim': editRemoteForm.isReconnecting }" />
-              <span>{{ editRemoteForm.isReconnecting ? '正在打开浏览器授权...' : '重新前往浏览器登录授权' }}</span>
+              <span>{{ editRemoteForm.isReconnecting ? $t('ui.remote.reconnecting') : $t('ui.remote.reauth') }}</span>
             </button>
           </div>
 
           <!-- S3 Edit -->
           <template v-if="editRemoteForm.type.includes('s3')">
             <div class="setting-group">
-              <label class="group-title">S3 存储子类型 (S3 Provider)</label>
+              <label class="group-title">{{ $t('ui.remote.s3ProviderLabel') }}</label>
               <select
                 :value="editRemoteForm.s3Provider"
                 @change="onS3ProviderSelect(editRemoteForm, $event.target.value)"
                 class="modal-input"
               >
                 <option v-for="sp in S3_PROVIDERS" :key="sp.value" :value="sp.value">
-                  {{ sp.label }}
+                  {{ $t(sp.labelKey) }}
                 </option>
               </select>
             </div>
             <div class="setting-group">
-              <label class="group-title">访问密钥 ID (Access Key ID)</label>
+              <label class="group-title">{{ $t('ui.remote.s3AccessKeyLabel') }}</label>
               <input type="text" v-model="editRemoteForm.s3AccessKey" class="modal-input font-mono" placeholder="Access Key ID" />
             </div>
             <div class="setting-group">
-              <label class="group-title">私密密钥 (Secret Access Key)</label>
+              <label class="group-title">{{ $t('ui.remote.s3SecretKeyLabel') }}</label>
               <div class="password-wrapper">
                 <input
                   :type="editRemoteForm.showSecretKey ? 'text' : 'password'"
                   v-model="editRemoteForm.s3SecretKey"
                   class="modal-input font-mono pr-10"
-                  placeholder="留空代表不变更密钥"
+                  :placeholder="$t('ui.remote.secretUnchanged')"
                 />
                 <button
                   type="button"
@@ -3919,24 +4001,24 @@ onUnmounted(() => {
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">服务区域 (Region)</label>
-                <input type="text" v-model="editRemoteForm.s3Region" class="modal-input font-mono" placeholder="例如：us-east-1" />
+                <label class="group-title">{{ $t('ui.remote.regionLabel') }}</label>
+                <input type="text" v-model="editRemoteForm.s3Region" class="modal-input font-mono" :placeholder="$t('ui.remote.regionEditPlaceholder')" />
               </div>
               <div class="setting-group">
-                <label class="group-title">端点网址 (Endpoint URL)</label>
-                <input type="text" v-model="editRemoteForm.s3Endpoint" class="modal-input font-mono" placeholder="自定义端点" />
+                <label class="group-title">{{ $t('ui.remote.endpointLabel') }}</label>
+                <input type="text" v-model="editRemoteForm.s3Endpoint" class="modal-input font-mono" :placeholder="$t('ui.remote.endpointEditPlaceholder')" />
               </div>
             </div>
             <details class="advanced-details mt-2">
-              <summary class="advanced-summary">高级 S3 选项</summary>
+              <summary class="advanced-summary">{{ $t('ui.remote.s3AdvancedShort') }}</summary>
               <div class="setting-group mt-2">
                 <label class="checkbox-label">
                   <input type="checkbox" v-model="editRemoteForm.s3ForcePathStyle" />
-                  <span>强制路径样式 (Force Path Style)</span>
+                  <span>{{ $t('ui.remote.s3PathStyleShort') }}</span>
                 </label>
                 <label class="checkbox-label mt-1">
                   <input type="checkbox" v-model="editRemoteForm.s3EnvAuth" />
-                  <span>从环境变量或 IAM 读取凭证 (Env Auth)</span>
+                  <span>{{ $t('ui.remote.s3EnvAuthShort') }}</span>
                 </label>
               </div>
             </details>
@@ -3949,52 +4031,52 @@ onUnmounted(() => {
               <input type="text" v-model="editRemoteForm.url" class="modal-input" />
             </div>
             <div class="setting-group">
-              <label class="group-title">用户名</label>
+              <label class="group-title">{{ $t('ui.remote.username') }}</label>
               <input type="text" v-model="editRemoteForm.user" class="modal-input" />
             </div>
             <div class="setting-group">
-              <label class="group-title">新密码 (若不修改请留空)</label>
-              <input type="password" v-model="editRemoteForm.pass" class="modal-input" placeholder="留空代表不变更密码" />
+              <label class="group-title">{{ $t('ui.remote.newPasswordLabel') }}</label>
+              <input type="password" v-model="editRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.passwordUnchanged')" />
             </div>
           </template>
 
           <!-- PikPak Edit -->
           <template v-if="editRemoteForm.type === 'pikpak'">
             <div class="setting-group">
-              <label class="group-title">账号 (邮箱 / 手机号)</label>
+              <label class="group-title">{{ $t('ui.remote.accountLabel') }}</label>
               <input type="text" v-model="editRemoteForm.user" class="modal-input" />
             </div>
             <div class="setting-group">
-              <label class="group-title">新密码 (若不修改请留空)</label>
-              <input type="password" v-model="editRemoteForm.pass" class="modal-input" placeholder="留空代表不变更密码" />
+              <label class="group-title">{{ $t('ui.remote.newPasswordLabel') }}</label>
+              <input type="password" v-model="editRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.passwordUnchanged')" />
             </div>
-            <p class="group-desc">修改账号或密码后，rclone 会重新登录验证一次 PikPak 账号。</p>
+            <p class="group-desc">{{ $t('ui.remote.pikpakEditDesc') }}</p>
           </template>
 
           <!-- SMB Edit -->
           <template v-if="editRemoteForm.type === 'smb'">
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">主机位置 (Host)</label>
+                <label class="group-title">{{ $t('ui.remote.hostLabel') }}</label>
                 <input type="text" v-model="editRemoteForm.host" class="modal-input" />
               </div>
               <div class="setting-group">
-                <label class="group-title">连接端口 (Port)</label>
+                <label class="group-title">{{ $t('ui.remote.portLabel') }}</label>
                 <input type="text" v-model="editRemoteForm.port" class="modal-input" placeholder="445" />
               </div>
             </div>
             <div class="grid-2-col">
               <div class="setting-group">
-                <label class="group-title">用户账号</label>
+                <label class="group-title">{{ $t('ui.remote.userAccount') }}</label>
                 <input type="text" v-model="editRemoteForm.user" class="modal-input" />
               </div>
               <div class="setting-group">
-                <label class="group-title">新密码 (若不修改请留空)</label>
-                <input type="password" v-model="editRemoteForm.pass" class="modal-input" placeholder="留空代表不变更密码" />
+                <label class="group-title">{{ $t('ui.remote.newPasswordLabel') }}</label>
+                <input type="password" v-model="editRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.passwordUnchanged')" />
               </div>
             </div>
             <div class="setting-group">
-              <label class="group-title">域名名称 (Domain)</label>
+              <label class="group-title">{{ $t('ui.remote.smbDomainShort') }}</label>
               <input type="text" v-model="editRemoteForm.domain" class="modal-input" />
             </div>
           </template>
@@ -4002,56 +4084,56 @@ onUnmounted(() => {
           <!-- FTP / SFTP Edit -->
           <template v-if="editRemoteForm.type === 'ftp' || editRemoteForm.type === 'sftp'">
             <div class="setting-group">
-              <label class="group-title">主机位置 (Host)</label>
+              <label class="group-title">{{ $t('ui.remote.hostLabel') }}</label>
               <input type="text" v-model="editRemoteForm.host" class="modal-input" />
             </div>
             <div class="setting-group" v-if="editRemoteForm.type === 'ftp' || editRemoteForm.type === 'sftp'">
-              <label class="group-title">连接端口 (Port)</label>
+              <label class="group-title">{{ $t('ui.remote.portLabel') }}</label>
               <input type="text" v-model="editRemoteForm.port" class="modal-input" :placeholder="editRemoteForm.type === 'sftp' ? '22' : '21'" />
             </div>
             <div class="setting-group">
-              <label class="group-title">用户账号</label>
+              <label class="group-title">{{ $t('ui.remote.userAccount') }}</label>
               <input type="text" v-model="editRemoteForm.user" class="modal-input" />
             </div>
             <div class="setting-group">
-              <label class="group-title">新密码 (若不修改请留空)</label>
-              <input type="password" v-model="editRemoteForm.pass" class="modal-input" placeholder="留空代表不变更密码" />
+              <label class="group-title">{{ $t('ui.remote.newPasswordLabel') }}</label>
+              <input type="password" v-model="editRemoteForm.pass" class="modal-input" :placeholder="$t('ui.remote.passwordUnchanged')" />
             </div>
             <div class="setting-group">
-              <label class="group-title">访问目录 (远程路径，选填)</label>
-              <input type="text" v-model="editRemoteForm.remotePath" class="modal-input" placeholder="例如：/data（服务器绝对路径；留空则使用默认目录 /root）" />
-              <p class="group-desc">填写服务器上的绝对路径，将直接挂载该目录（如 /data 对应服务器 /data，而非 /root/data）</p>
+              <label class="group-title">{{ $t('ui.remote.remotePathLabel') }}</label>
+              <input type="text" v-model="editRemoteForm.remotePath" class="modal-input" :placeholder="$t('ui.remote.remotePathPlaceholder')" />
+              <p class="group-desc">{{ $t('ui.remote.remotePathDesc') }}</p>
             </div>
           </template>
 
           <!-- Optional Client ID / Secret for Advanced Users -->
           <div v-if="editRemoteForm.type.includes('drive') || editRemoteForm.type.includes('onedrive')" class="setting-group">
-            <label class="group-title">自定义 Client ID (选填)</label>
+            <label class="group-title">{{ $t('ui.remote.customClientId') }}</label>
             <input
               type="text"
               v-model="editRemoteForm.clientId"
               class="modal-input"
-              :placeholder="editRemoteForm.type.includes('onedrive') ? '自定义 Microsoft / Azure Client ID' : '自定义 Google API Client ID'"
+              :placeholder="editRemoteForm.type.includes('onedrive') ? $t('ui.remote.msClientIdPlaceholder') : $t('ui.remote.googleClientIdPlaceholder')"
             />
-            <label class="group-title mt-2">自定义 Client Secret (选填)</label>
+            <label class="group-title mt-2">{{ $t('ui.remote.customClientSecret') }}</label>
             <input
               type="password"
               v-model="editRemoteForm.clientSecret"
               class="modal-input"
-              :placeholder="editRemoteForm.type.includes('onedrive') ? '自定义 Microsoft / Azure Client Secret' : '自定义 Google API Client Secret'"
+              :placeholder="editRemoteForm.type.includes('onedrive') ? $t('ui.remote.msClientSecretPlaceholder') : $t('ui.remote.googleClientSecretPlaceholder')"
             />
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showEditRemoteModal = false">取消</button>
+          <button class="btn btn-secondary" @click="showEditRemoteModal = false">{{ $t('common.cancel') }}</button>
           <button
             class="btn btn-primary"
             @click="submitEditRemote"
             :disabled="editRemoteForm.isSaving"
           >
             <Check class="btn-icon" />
-            <span>{{ editRemoteForm.isSaving ? '保存中...' : '保存修改' }}</span>
+            <span>{{ editRemoteForm.isSaving ? $t('ui.remote.saving') : $t('common.saveChanges') }}</span>
           </button>
         </div>
       </div>
@@ -4063,7 +4145,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <div class="modal-title">
             <CalendarClock class="modal-title-icon" />
-            <span>创建定时调度同步任务</span>
+            <span>{{ $t('ui.taskModal.addTitle') }}</span>
           </div>
           <button class="close-btn" @click="showAddTaskModal = false">
             <X class="close-icon" />
@@ -4072,39 +4154,39 @@ onUnmounted(() => {
 
         <div class="modal-body">
           <div class="setting-group">
-            <label class="group-title">任务名称</label>
-            <input type="text" v-model="newTask.name" class="modal-input" placeholder="例如：每日照片自动备份" />
+            <label class="group-title">{{ $t('ui.taskModal.nameLabel') }}</label>
+            <input type="text" v-model="newTask.name" class="modal-input" :placeholder="$t('ui.taskModal.namePlaceholder')" />
           </div>
           <div class="setting-group">
-            <label class="group-title">来源路径 (Source)</label>
-            <input type="text" v-model="newTask.source" class="modal-input" placeholder="例如：D:\Photos 或 GDrive_alanytp100:Photos" />
+            <label class="group-title">{{ $t('ui.taskModal.sourceLabel') }}</label>
+            <input type="text" v-model="newTask.source" class="modal-input" :placeholder="$t('ui.taskModal.sourcePlaceholder')" />
           </div>
           <div class="setting-group">
-            <label class="group-title">目的路径 (Destination)</label>
-            <input type="text" v-model="newTask.dest" class="modal-input" placeholder="例如：GPhoto_alanytp100:Backup" />
+            <label class="group-title">{{ $t('ui.taskModal.destLabel') }}</label>
+            <input type="text" v-model="newTask.dest" class="modal-input" :placeholder="$t('ui.taskModal.destPlaceholder')" />
           </div>
           <div class="setting-group">
-            <label class="group-title">动作模式</label>
+            <label class="group-title">{{ $t('ui.taskModal.actionLabel') }}</label>
             <select v-model="newTask.action" class="modal-input">
-              <option value="copy">Copy (增量备份，不删除目标端文件)</option>
-              <option value="sync">Sync (完全镜像同步，目标端文件与来源一致)</option>
+              <option value="copy">{{ $t('ui.taskModal.actionCopy') }}</option>
+              <option value="sync">{{ $t('ui.taskModal.actionSync') }}</option>
             </select>
           </div>
           <div class="setting-group">
-            <label class="group-title">排除文件过滤规则 (选填)</label>
-            <input type="text" v-model="newTask.excludeFilter" class="modal-input" placeholder="例如：*.tmp, *.bak, thumbs.db, node_modules/**" />
-            <span class="field-hint">若有输入，调度运行时将自动跳过符合的文件</span>
+            <label class="group-title">{{ $t('ui.taskModal.filterLabel') }}</label>
+            <input type="text" v-model="newTask.excludeFilter" class="modal-input" :placeholder="$t('ui.taskModal.filterPlaceholder')" />
+            <span class="field-hint">{{ $t('ui.taskModal.filterHint') }}</span>
           </div>
           <div class="setting-group">
-            <label class="group-title">运行频率 (分钟)</label>
+            <label class="group-title">{{ $t('ui.taskModal.intervalLabel') }}</label>
             <input type="number" v-model="newTask.intervalMinutes" class="modal-input" min="5" placeholder="60" />
-            <span class="field-hint">每隔多少分钟自动运行一次 (建议 60 分钟以上)</span>
+            <span class="field-hint">{{ $t('ui.taskModal.intervalHint') }}</span>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showAddTaskModal = false">取消</button>
-          <button class="btn btn-primary" @click="submitAddTask">创建调度</button>
+          <button class="btn btn-secondary" @click="showAddTaskModal = false">{{ $t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="submitAddTask">{{ $t('ui.taskModal.create') }}</button>
         </div>
       </div>
     </div>
@@ -4115,7 +4197,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <div class="modal-title">
             <Pencil class="modal-title-icon" />
-            <span>修改调度任务</span>
+            <span>{{ $t('ui.taskModal.editTitle') }}</span>
           </div>
           <button class="close-btn" @click="showEditTaskModal = false">
             <X class="close-icon" />
@@ -4124,46 +4206,46 @@ onUnmounted(() => {
 
         <div class="modal-body">
           <div class="setting-group">
-            <label class="group-title">任务名称</label>
-            <input type="text" v-model="editTaskForm.name" class="modal-input" placeholder="例如：每日照片自动备份" />
+            <label class="group-title">{{ $t('ui.taskModal.nameLabel') }}</label>
+            <input type="text" v-model="editTaskForm.name" class="modal-input" :placeholder="$t('ui.taskModal.namePlaceholder')" />
           </div>
           <div class="setting-group">
-            <label class="group-title">来源路径 (Source)</label>
-            <input type="text" v-model="editTaskForm.source" class="modal-input" placeholder="例如：D:\Photos 或 GDrive_alanytp100:Photos" />
+            <label class="group-title">{{ $t('ui.taskModal.sourceLabel') }}</label>
+            <input type="text" v-model="editTaskForm.source" class="modal-input" :placeholder="$t('ui.taskModal.sourcePlaceholder')" />
           </div>
           <div class="setting-group">
-            <label class="group-title">目的路径 (Destination)</label>
-            <input type="text" v-model="editTaskForm.dest" class="modal-input" placeholder="例如：GPhoto_alanytp100:Backup" />
+            <label class="group-title">{{ $t('ui.taskModal.destLabel') }}</label>
+            <input type="text" v-model="editTaskForm.dest" class="modal-input" :placeholder="$t('ui.taskModal.destPlaceholder')" />
           </div>
           <div class="setting-group">
-            <label class="group-title">动作模式</label>
+            <label class="group-title">{{ $t('ui.taskModal.actionLabel') }}</label>
             <select v-model="editTaskForm.action" class="modal-input">
-              <option value="copy">Copy (增量备份，不删除目标端文件)</option>
-              <option value="sync">Sync (完全镜像同步，目标端文件与来源一致)</option>
+              <option value="copy">{{ $t('ui.taskModal.actionCopy') }}</option>
+              <option value="sync">{{ $t('ui.taskModal.actionSync') }}</option>
             </select>
           </div>
           <div class="setting-group">
-            <label class="group-title">排除文件过滤规则 (选填)</label>
-            <input type="text" v-model="editTaskForm.excludeFilter" class="modal-input" placeholder="例如：*.tmp, *.bak, thumbs.db, node_modules/**" />
-            <span class="field-hint">若有输入，调度运行时将自动跳过符合的文件</span>
+            <label class="group-title">{{ $t('ui.taskModal.filterLabel') }}</label>
+            <input type="text" v-model="editTaskForm.excludeFilter" class="modal-input" :placeholder="$t('ui.taskModal.filterPlaceholder')" />
+            <span class="field-hint">{{ $t('ui.taskModal.filterHint') }}</span>
           </div>
           <div class="setting-group">
-            <label class="group-title">运行频率 (分钟)</label>
+            <label class="group-title">{{ $t('ui.taskModal.intervalLabel') }}</label>
             <input type="number" v-model="editTaskForm.intervalMinutes" class="modal-input" min="1" placeholder="60" />
-            <span class="field-hint">每隔多少分钟自动运行一次 (建议 60 分钟以上)</span>
+            <span class="field-hint">{{ $t('ui.taskModal.intervalHint') }}</span>
           </div>
           <div class="setting-group">
-            <label class="group-title">任务状态</label>
+            <label class="group-title">{{ $t('ui.taskModal.statusLabel') }}</label>
             <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
               <input type="checkbox" v-model="editTaskForm.enabled" />
-              <span>启用此定时调度任务</span>
+              <span>{{ $t('ui.taskModal.enableLabel') }}</span>
             </label>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showEditTaskModal = false">取消</button>
-          <button class="btn btn-primary" @click="submitEditTask">保存修改</button>
+          <button class="btn btn-secondary" @click="showEditTaskModal = false">{{ $t('common.cancel') }}</button>
+          <button class="btn btn-primary" @click="submitEditTask">{{ $t('common.saveChanges') }}</button>
         </div>
       </div>
     </div>
@@ -4174,7 +4256,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <div class="modal-title">
             <Sliders class="modal-title-icon" />
-            <span>系统偏好与自定义路径</span>
+            <span>{{ $t('ui.settings.title') }}</span>
           </div>
           <button class="close-btn" @click="showSettings = false">
             <X class="close-icon" />
@@ -4183,19 +4265,19 @@ onUnmounted(() => {
 
         <div class="modal-body">
           <div class="setting-group">
-            <label class="group-title">Rclone 可执行文件路径</label>
-            <p class="group-desc">默认为 C:\rclone\rclone.exe</p>
+            <label class="group-title">{{ $t('ui.settings.rclonePathLabel') }}</label>
+            <p class="group-desc">{{ $t('ui.settings.rclonePathDesc') }}</p>
             <div class="input-with-button">
               <input type="text" v-model="customRclonePath" class="modal-input" />
-              <button class="btn btn-secondary" @click="saveCustomPath">保存路径</button>
+              <button class="btn btn-secondary" @click="saveCustomPath">{{ $t('ui.settings.savePath') }}</button>
             </div>
           </div>
 
           <div class="setting-group">
             <div class="switch-row">
               <div>
-                <div class="switch-title">开机自动启动</div>
-                <div class="group-desc">登录 Windows 时自动在后台启动 Rclone Drive</div>
+                <div class="switch-title">{{ $t('ui.settings.autostartTitle') }}</div>
+                <div class="group-desc">{{ $t('ui.settings.autostartDesc') }}</div>
               </div>
               <button
                 class="toggle-switch"
@@ -4210,8 +4292,8 @@ onUnmounted(() => {
           <div class="setting-group">
             <div class="switch-row">
               <div>
-                <div class="switch-title">开机启动后缩小至系统托盘 (Tray)</div>
-                <div class="group-desc">开机自启动时保持在右下角通知区常驻，不主动弹出窗口</div>
+                <div class="switch-title">{{ $t('ui.settings.startMinimizedTitle') }}</div>
+                <div class="group-desc">{{ $t('ui.settings.startMinimizedDesc') }}</div>
               </div>
               <button
                 class="toggle-switch"
@@ -4224,24 +4306,32 @@ onUnmounted(() => {
           </div>
 
           <div class="setting-group">
-            <label class="group-title">默认云端挂载性能策略 (Global Mount Preset)</label>
-            <p class="group-desc">新加入或未个别微调的云端硬盘挂载时，默认应用的缓存性能策略</p>
+            <label class="group-title">{{ $t('settings.language') }}</label>
+            <p class="group-desc">{{ $t('settings.languageDesc') }}</p>
+            <select class="modal-input" :value="locale" @change="changeLanguage($event.target.value)">
+              <option v-for="lang in languages" :key="lang.code" :value="lang.code">{{ lang.label }}</option>
+            </select>
+          </div>
+
+          <div class="setting-group">
+            <label class="group-title">{{ $t('ui.settings.globalPresetTitle') }}</label>
+            <p class="group-desc">{{ $t('ui.settings.globalPresetDesc') }}</p>
             <select
               v-model="globalMountPreset"
               @change="saveGlobalMountPreset(globalMountPreset)"
               class="modal-input"
             >
-              <option value="fast">⚡ 极速推荐 (Fast: 72h 缓存, 10m 属性, 50G 磁盘缓存, 后台预热)</option>
-              <option value="default">⚖️ 官方平衡 (Default: 5m 目录缓存, 1s 属性, 关闭后台预热)</option>
-              <option value="custom">🛠️ 自定义高级 (Custom)</option>
+              <option value="fast">{{ $t('ui.settings.presetFast') }}</option>
+              <option value="default">{{ $t('ui.settings.presetDefault') }}</option>
+              <option value="custom">{{ $t('ui.settings.presetCustom') }}</option>
             </select>
           </div>
 
           <div class="setting-group">
             <div class="switch-row">
               <div>
-                <div class="switch-title">浅色外观主题 (Light Mode)</div>
-                <div class="group-desc">切换明亮浅色或深邃暗色界面外观风格</div>
+                <div class="switch-title">{{ $t('ui.settings.lightModeTitle') }}</div>
+                <div class="group-desc">{{ $t('ui.settings.lightModeDesc') }}</div>
               </div>
               <button
                 class="toggle-switch"
@@ -4257,9 +4347,9 @@ onUnmounted(() => {
           <div class="setting-group">
             <div class="switch-row">
               <div>
-                <div class="switch-title">自动检查 GitHub 最新版本</div>
+                <div class="switch-title">{{ $t('ui.settings.autoCheckTitle') }}</div>
                 <div class="group-desc">
-                  目前版本：v{{ CURRENT_VERSION }} • 上次检查：{{ updateSettings.lastCheckTimeStr }}
+                  {{ $t('ui.settings.versionInfo', { version: CURRENT_VERSION, time: updateSettings.lastCheckTimeStr || $t('msg.update.neverChecked') }) }}
                 </div>
               </div>
               <button
@@ -4273,26 +4363,26 @@ onUnmounted(() => {
           </div>
 
           <div class="setting-group" v-if="updateSettings.enabled">
-            <label class="group-title">版本检查频率</label>
-            <p class="group-desc">设置后台向 GitHub Releases 自动检查新版本的间隔周期</p>
+            <label class="group-title">{{ $t('ui.settings.intervalLabel') }}</label>
+            <p class="group-desc">{{ $t('ui.settings.intervalDesc') }}</p>
             <select
               v-model.number="updateSettings.intervalDays"
               @change="saveUpdateSettings"
               class="modal-input"
             >
-              <option :value="1">每天检查一次</option>
-              <option :value="3">每 3 天检查一次</option>
-              <option :value="7">每周检查一次 (默认)</option>
-              <option :value="14">每两周检查一次</option>
-              <option :value="30">每月检查一次</option>
+              <option :value="1">{{ $t('ui.settings.interval1d') }}</option>
+              <option :value="3">{{ $t('ui.settings.interval3d') }}</option>
+              <option :value="7">{{ $t('ui.settings.interval7d') }}</option>
+              <option :value="14">{{ $t('ui.settings.interval14d') }}</option>
+              <option :value="30">{{ $t('ui.settings.interval30d') }}</option>
             </select>
           </div>
 
           <div class="setting-group">
             <div class="switch-row">
               <div>
-                <div class="switch-title">手动检查最新版本</div>
-                <div class="group-desc">实时连接 GitHub 查找是否有新版发布</div>
+                <div class="switch-title">{{ $t('ui.settings.manualCheckTitle') }}</div>
+                <div class="group-desc">{{ $t('ui.settings.manualCheckDesc') }}</div>
               </div>
               <button
                 class="btn btn-secondary btn-sm"
@@ -4300,7 +4390,7 @@ onUnmounted(() => {
                 :disabled="isCheckingUpdate"
               >
                 <RefreshCw class="btn-icon" :class="{ 'spin-anim': isCheckingUpdate }" />
-                <span>{{ isCheckingUpdate ? '检查中...' : '检查更新' }}</span>
+                <span>{{ isCheckingUpdate ? $t('ui.settings.checking') : $t('ui.header.checkUpdate') }}</span>
               </button>
             </div>
           </div>
@@ -4308,17 +4398,17 @@ onUnmounted(() => {
           <div class="setting-group info-box">
             <div class="info-title">
               <Info class="info-icon" />
-              <span>依赖组件下载信息</span>
+              <span>{{ $t('ui.settings.depsTitle') }}</span>
             </div>
             <p class="group-desc">
-              • <b>WinFsp 文件系统核心</b>：<a href="#" class="link" @click.prevent="openUrl('https://winfsp.dev/')">前往 winfsp.dev 下载</a><br />
-              • <b>Rclone 官方最新版本</b>：<a href="#" class="link" @click.prevent="openUrl('https://rclone.org/downloads/')">前往 rclone.org 下载</a>
+              <span v-html="$t('ui.settings.depsWinfsp')"></span><a href="#" class="link" @click.prevent="openUrl('https://winfsp.dev/')">{{ $t('ui.settings.depsWinfspLink') }}</a><br />
+              <span v-html="$t('ui.settings.depsRclone')"></span><a href="#" class="link" @click.prevent="openUrl('https://rclone.org/downloads/')">{{ $t('ui.settings.depsRcloneLink') }}</a>
             </p>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showSettings = false">关闭</button>
+          <button class="btn btn-secondary" @click="showSettings = false">{{ $t('common.close') }}</button>
         </div>
       </div>
     </div>
@@ -4329,7 +4419,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <div class="modal-title">
             <Cloud class="modal-title-icon text-cyan" />
-            <span>选择云端硬盘目录 ({{ cloudBrowseTarget === 'source' ? '来源路径' : '目的路径' }})</span>
+            <span>{{ $t('ui.browse.title', { type: cloudBrowseTarget === 'source' ? $t('ui.browse.sourceType') : $t('ui.browse.destType') }) }}</span>
           </div>
           <button class="close-btn" @click="showCloudBrowseModal = false">
             <X class="close-icon" />
@@ -4339,7 +4429,7 @@ onUnmounted(() => {
         <div class="modal-body">
           <!-- Remote Selector -->
           <div class="setting-group">
-            <label class="group-title">选择云端远程 (Remote)</label>
+            <label class="group-title">{{ $t('ui.browse.selectRemote') }}</label>
             <select v-model="cloudBrowseRemote" class="modal-input" @change="cloudBrowseCurrentSubpath = ''; fetchCloudDirs()">
               <option v-for="r in remotes" :key="r.name" :value="r.name">
                 {{ r.name }} ({{ r.remote_type }})
@@ -4350,7 +4440,7 @@ onUnmounted(() => {
           <!-- Current Path Breadcrumb -->
           <div class="cloud-breadcrumb-bar">
             <button class="btn btn-xs btn-outline" @click="goCloudParentDir" :disabled="!cloudBrowseCurrentSubpath">
-              <span>⬅️ 上一层目录</span>
+              <span>{{ $t('ui.browse.parentDir') }}</span>
             </button>
             <div class="cloud-current-path" :title="`${cloudBrowseRemote}:${cloudBrowseCurrentSubpath}`">
               📁 {{ cloudBrowseRemote }}:/{{ cloudBrowseCurrentSubpath }}
@@ -4361,10 +4451,10 @@ onUnmounted(() => {
           <div class="cloud-dirs-container">
             <div v-if="isLoadingCloudDirs" class="cloud-dirs-loading">
               <RefreshCw class="btn-icon spin-anim text-cyan" />
-              <span>正在读取云端目录清单...</span>
+              <span>{{ $t('ui.browse.loading') }}</span>
             </div>
             <div v-else-if="cloudBrowseDirs.length === 0" class="cloud-dirs-empty">
-              <span>此层无其他子文件夹（或可以直接选择此层作为路径）</span>
+              <span>{{ $t('ui.browse.empty') }}</span>
             </div>
             <div v-else class="cloud-dirs-list">
               <div
@@ -4376,18 +4466,18 @@ onUnmounted(() => {
                 <Folder class="cloud-dir-icon" />
                 <span class="cloud-dir-name">{{ d }}</span>
                 <button class="btn btn-xs btn-outline ml-auto" @click="enterCloudSubdir(d)">
-                  进入 ➔
+                  {{ $t('ui.browse.enter') }}
                 </button>
               </div>
             </div>
           </div>
-          <span class="field-hint">可点击「进入」进入子文件夹，确认好路径后点击下方「选择此路径」即可自动带入！</span>
+          <span class="field-hint">{{ $t('ui.browse.hint') }}</span>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showCloudBrowseModal = false">取消</button>
+          <button class="btn btn-secondary" @click="showCloudBrowseModal = false">{{ $t('common.cancel') }}</button>
           <button class="btn btn-primary" @click="confirmCloudBrowseSelect">
-            <span>选择此路径 ({{ cloudBrowseRemote }}:{{ cloudBrowseCurrentSubpath ? '/' + cloudBrowseCurrentSubpath : '' }})</span>
+            <span>{{ $t('ui.browse.selectPath', { path: cloudBrowseRemote + ':' + (cloudBrowseCurrentSubpath ? '/' + cloudBrowseCurrentSubpath : '') }) }}</span>
           </button>
         </div>
       </div>
@@ -4399,7 +4489,7 @@ onUnmounted(() => {
         <div class="modal-header">
           <div class="modal-title">
             <DownloadCloud class="modal-title-icon text-cyan" />
-            <span>发现新版本更新 (v{{ updateInfo.latestVersion }})</span>
+            <span>{{ $t('ui.update.title', { version: updateInfo.latestVersion }) }}</span>
           </div>
           <button class="close-btn" @click="showUpdateModal = false">
             <X class="close-icon" />
@@ -4414,7 +4504,7 @@ onUnmounted(() => {
               <span class="new-ver">v{{ updateInfo.latestVersion }}</span>
             </div>
             <div class="update-date" v-if="updateInfo.publishedAt">
-              发布日期：{{ updateInfo.publishedAt }}
+              {{ $t('ui.update.publishedAt', { date: updateInfo.publishedAt }) }}
             </div>
           </div>
 
@@ -4423,26 +4513,26 @@ onUnmounted(() => {
           </div>
 
           <div class="update-notes-container">
-            <div class="update-notes-header">更新说明与改版内容：</div>
+            <div class="update-notes-header">{{ $t('ui.update.notesHeader') }}</div>
             <pre class="update-notes-pre">{{ updateInfo.releaseNotes }}</pre>
           </div>
 
           <p class="update-tip">
-            点击下方「下载更新并运行」，系统将自动下载最新安装程序并启动更新。您也可以直接前往 GitHub 页面查看或手动下载。
+            {{ $t('ui.update.tip') }}
           </p>
         </div>
 
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="showUpdateModal = false" :disabled="isDownloadingUpdate">
-            稍后提醒
+            {{ $t('ui.update.later') }}
           </button>
           <button class="btn btn-secondary" @click="openUrl(updateInfo.htmlUrl)">
             <ExternalLink class="btn-icon" />
-            <span>在 GitHub 查看</span>
+            <span>{{ $t('ui.update.viewGithub') }}</span>
           </button>
           <button class="btn btn-primary btn-update-action" @click="executeUpdate" :disabled="isDownloadingUpdate">
             <DownloadCloud class="btn-icon" :class="{ 'spin-anim': isDownloadingUpdate }" />
-            <span>{{ isDownloadingUpdate ? '正在下载更新中...' : '下载更新并运行' }}</span>
+            <span>{{ isDownloadingUpdate ? $t('ui.update.downloading') : $t('ui.update.downloadRun') }}</span>
           </button>
         </div>
       </div>

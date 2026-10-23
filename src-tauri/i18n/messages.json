@@ -1,0 +1,387 @@
+{
+  "app.windowTitle": {
+    "zh-CN": "Rclone Drive - 云端硬盘挂载器",
+    "zh-TW": "Rclone Drive - 雲端硬碟掛載器",
+    "en": "Rclone Drive - Cloud Drive Mounter"
+  },
+  "app.trayTooltip": {
+    "zh-CN": "Rclone Drive - 云端硬盘挂载与同步系统",
+    "zh-TW": "Rclone Drive - 雲端硬碟掛載與同步系統",
+    "en": "Rclone Drive - Cloud Drive Mounting & Sync"
+  },
+  "tray.quit": {
+    "zh-CN": "结束 (Quit)",
+    "zh-TW": "結束 (Quit)",
+    "en": "Quit"
+  },
+  "tray.showDashboard": {
+    "zh-CN": "打开仪表盘 (Show Dashboard)",
+    "zh-TW": "開啟儀表板 (Show Dashboard)",
+    "en": "Show Dashboard"
+  },
+  "tray.openWebGui": {
+    "zh-CN": "打开 Rclone Web-GUI (浏览器)",
+    "zh-TW": "開啟 Rclone Web-GUI (瀏覽器)",
+    "en": "Open Rclone Web-GUI (Browser)"
+  },
+  "install.rcloneRunFailed": {
+    "zh-CN": "运行下载安装失败: {detail}",
+    "zh-TW": "執行下載安裝失敗: {detail}",
+    "en": "Failed to run download and install: {detail}"
+  },
+  "install.rcloneFailed": {
+    "zh-CN": "安装 Rclone 失败: {detail}",
+    "zh-TW": "安裝 Rclone 失敗: {detail}",
+    "en": "Failed to install Rclone: {detail}"
+  },
+  "install.rcloneNoPath": {
+    "zh-CN": "下载完成但未获取安装路径",
+    "zh-TW": "下載完成但未取得安裝路徑",
+    "en": "Download completed but no install path was returned"
+  },
+  "common.threadError": {
+    "zh-CN": "线程错误: {detail}",
+    "zh-TW": "執行緒錯誤: {detail}",
+    "en": "Thread error: {detail}"
+  },
+  "install.winfspStartFailed": {
+    "zh-CN": "启动 WinFsp 安装程序失败: {detail}",
+    "zh-TW": "啟動 WinFsp 安裝程式失敗: {detail}",
+    "en": "Failed to start the WinFsp installer: {detail}"
+  },
+  "install.winfspFailed": {
+    "zh-CN": "下载或安装 WinFsp 失败: {detail}",
+    "zh-TW": "下載或安裝 WinFsp 失敗: {detail}",
+    "en": "Failed to download or install WinFsp: {detail}"
+  },
+  "install.winfspFinished": {
+    "zh-CN": "WinFsp 安装程序已运行完毕",
+    "zh-TW": "WinFsp 安裝程式已執行完畢",
+    "en": "The WinFsp installer has finished"
+  },
+  "update.runFailed": {
+    "zh-CN": "运行更新程序失败: {detail}",
+    "zh-TW": "執行更新程式失敗: {detail}",
+    "en": "Failed to run the updater: {detail}"
+  },
+  "update.startFailed": {
+    "zh-CN": "下载或启动更新失败: {detail}",
+    "zh-TW": "下載或啟動更新失敗: {detail}",
+    "en": "Failed to download or launch the update: {detail}"
+  },
+  "update.installerStarted": {
+    "zh-CN": "更新安装程序已成功启动",
+    "zh-TW": "更新安裝程式已成功啟動",
+    "en": "The update installer launched successfully"
+  },
+  "config.dumpRunFailed": {
+    "zh-CN": "无法运行 rclone config dump: {detail}",
+    "zh-TW": "無法執行 rclone config dump: {detail}",
+    "en": "Failed to run rclone config dump: {detail}"
+  },
+  "config.readFailed": {
+    "zh-CN": "读取 rclone 设置失败: {detail}",
+    "zh-TW": "讀取 rclone 設定失敗: {detail}",
+    "en": "Failed to read the rclone configuration: {detail}"
+  },
+  "config.parseJsonFailed": {
+    "zh-CN": "解析 rclone 设置 JSON 失败: {detail}",
+    "zh-TW": "解析 rclone 設定 JSON 失敗: {detail}",
+    "en": "Failed to parse the rclone configuration JSON: {detail}"
+  },
+  "mount.alreadyMounted": {
+    "zh-CN": "远程 '{remote}' 已经挂载中！",
+    "zh-TW": "遠端 '{remote}' 已經掛載中！",
+    "en": "Remote '{remote}' is already mounted!"
+  },
+  "mount.driveLetterInUse": {
+    "zh-CN": "盘符 {drive}: 已被本机其他设备占用！",
+    "zh-TW": "磁碟代號 {drive}: 已被本機其他裝置占用！",
+    "en": "Drive letter {drive}: is already occupied by another device on this machine!"
+  },
+  "mount.spawnFailed": {
+    "zh-CN": "启动 rclone 挂载进程失败: {detail}",
+    "zh-TW": "啟動 rclone 掛載程式失敗: {detail}",
+    "en": "Failed to start the rclone mount process: {detail}"
+  },
+  "mount.exitCode": {
+    "zh-CN": "状态码: {detail}",
+    "zh-TW": "狀態碼: {detail}",
+    "en": "exit code: {detail}"
+  },
+  "mount.failed": {
+    "zh-CN": "挂载失败: rclone 进程已退出 ({detail})。请确认盘符是否冲突或设置是否有效。",
+    "zh-TW": "掛載失敗: rclone 程式已結束 ({detail})。請確認磁碟代號是否衝突或設定是否有效。",
+    "en": "Mount failed: the rclone process exited ({detail}). Please check for drive letter conflicts or invalid settings."
+  },
+  "mount.timeout": {
+    "zh-CN": "挂载超时，磁盘 {drive}: 未能及时就绪。请确认 WinFsp 正常运行。",
+    "zh-TW": "掛載逾時，磁碟 {drive}: 未能及時就緒。請確認 WinFsp 正常運作。",
+    "en": "Mount timed out: drive {drive}: did not become ready in time. Please make sure WinFsp is running properly."
+  },
+  "mount.notFound": {
+    "zh-CN": "找不到已挂载的远程 '{remote}'",
+    "zh-TW": "找不到已掛載的遠端 '{remote}'",
+    "en": "Mounted remote '{remote}' not found"
+  },
+  "explorer.openFailed": {
+    "zh-CN": "打开资源管理器失败: {detail}",
+    "zh-TW": "開啟檔案總管失敗: {detail}",
+    "en": "Failed to open File Explorer: {detail}"
+  },
+  "vfs.noRcPort": {
+    "zh-CN": "此磁盘挂载时未启用 RC 远程控制端口。请先将此磁盘「卸载」后重新「挂载」，即可使用刷新缓存！",
+    "zh-TW": "此磁碟掛載時未啟用 RC 遠端控制連接埠。請先將此磁碟「卸載」後重新「掛載」，即可使用重新整理快取！",
+    "en": "No RC control port was enabled when this drive was mounted. Unmount and remount the drive to use cache refresh!"
+  },
+  "vfs.runFailed": {
+    "zh-CN": "运行 vfs/refresh 失败: {detail}",
+    "zh-TW": "執行 vfs/refresh 失敗: {detail}",
+    "en": "Failed to run vfs/refresh: {detail}"
+  },
+  "vfs.refreshSent": {
+    "zh-CN": "已成功发送缓存刷新请求（异步后台更新中）",
+    "zh-TW": "已成功送出快取重新整理請求（背景非同步更新中）",
+    "en": "Cache refresh request sent successfully (updating in the background)"
+  },
+  "vfs.connectionFailed": {
+    "zh-CN": "无法连接至 Rclone 远程控制端口（请先「卸载」后重新「挂载」此磁盘以启用 RC 服务）",
+    "zh-TW": "無法連線至 Rclone 遠端控制連接埠（請先「卸載」後重新「掛載」此磁碟以啟用 RC 服務）",
+    "en": "Could not connect to the Rclone RC control port (unmount and remount this drive to enable the RC service)"
+  },
+  "vfs.refreshFailed": {
+    "zh-CN": "刷新缓存失败: {detail}",
+    "zh-TW": "重新整理快取失敗: {detail}",
+    "en": "Failed to refresh cache: {detail}"
+  },
+  "remote.createSpawnFailed": {
+    "zh-CN": "运行 rclone config create 失败: {detail}",
+    "zh-TW": "執行 rclone config create 失敗: {detail}",
+    "en": "Failed to run rclone config create: {detail}"
+  },
+  "remote.createWaitFailed": {
+    "zh-CN": "等待创建失败: {detail}",
+    "zh-TW": "等待建立失敗: {detail}",
+    "en": "Failed while waiting for remote creation: {detail}"
+  },
+  "remote.createSuccess": {
+    "zh-CN": "成功创建远程 '{remote}'！",
+    "zh-TW": "成功建立遠端 '{remote}'！",
+    "en": "Remote '{remote}' created successfully!"
+  },
+  "remote.typeNotSupported": {
+    "zh-CN": "当前 rclone 版本不支持该网盘类型 '{remoteType}'。请升级 rclone 到最新版（https://rclone.org/downloads/），或改用「原版终端向导」配置。",
+    "zh-TW": "目前 rclone 版本不支援該網路磁碟類型 '{remoteType}'。請將 rclone 升級到最新版（https://rclone.org/downloads/），或改用「原版終端機精靈」設定。",
+    "en": "The current rclone version does not support this storage type '{remoteType}'. Please upgrade rclone to the latest version (https://rclone.org/downloads/) or use the built-in terminal wizard instead."
+  },
+  "remote.createFailed": {
+    "zh-CN": "创建失败: {detail}",
+    "zh-TW": "建立失敗: {detail}",
+    "en": "Failed to create remote: {detail}"
+  },
+  "remote.createRunFailed": {
+    "zh-CN": "运行创建失败: {detail}",
+    "zh-TW": "執行建立失敗: {detail}",
+    "en": "Failed to run remote creation: {detail}"
+  },
+  "remote.nameInvalidChars": {
+    "zh-CN": "云端硬盘名称不可包含特殊字符 (: / \\ [ ] * ? < > | \")",
+    "zh-TW": "雲端硬碟名稱不可包含特殊字元 (: / \\ [ ] * ? < > | \")",
+    "en": "Cloud drive names cannot contain these special characters (: / \\ [ ] * ? < > | \")"
+  },
+  "remote.confNotFound": {
+    "zh-CN": "找不到 rclone.conf 配置文件路径！",
+    "zh-TW": "找不到 rclone.conf 設定檔路徑！",
+    "en": "Could not locate the rclone.conf configuration file!"
+  },
+  "remote.confReadFailed": {
+    "zh-CN": "无法读取 rclone.conf: {detail}",
+    "zh-TW": "無法讀取 rclone.conf: {detail}",
+    "en": "Failed to read rclone.conf: {detail}"
+  },
+  "remote.nameExists": {
+    "zh-CN": "云端硬盘名称 '{remote}' 已经存在，请更换其他名称！",
+    "zh-TW": "雲端硬碟名稱 '{remote}' 已經存在，請更換其他名稱！",
+    "en": "Cloud drive name '{remote}' already exists. Please choose a different name!"
+  },
+  "remote.originalNotFound": {
+    "zh-CN": "找不到原设置名称 '{remote}'",
+    "zh-TW": "找不到原始設定名稱 '{remote}'",
+    "en": "Original configuration name '{remote}' not found"
+  },
+  "remote.confWriteFailed": {
+    "zh-CN": "写入 rclone.conf 失败: {detail}",
+    "zh-TW": "寫入 rclone.conf 失敗: {detail}",
+    "en": "Failed to write rclone.conf: {detail}"
+  },
+  "remote.updateSpawnFailed": {
+    "zh-CN": "运行 rclone config update 失败: {detail}",
+    "zh-TW": "執行 rclone config update 失敗: {detail}",
+    "en": "Failed to run rclone config update: {detail}"
+  },
+  "remote.updateFailed": {
+    "zh-CN": "更新失败: {detail}",
+    "zh-TW": "更新失敗: {detail}",
+    "en": "Update failed: {detail}"
+  },
+  "remote.renameSuccess": {
+    "zh-CN": "成功将云端硬盘名称更名为 '{remote}' 并保存设置！",
+    "zh-TW": "成功將雲端硬碟名稱變更為 '{remote}' 並儲存設定！",
+    "en": "Cloud drive renamed to '{remote}' and settings saved!"
+  },
+  "remote.updateSuccess": {
+    "zh-CN": "成功更新远程 '{remote}' 的设置！",
+    "zh-TW": "成功更新遠端 '{remote}' 的設定！",
+    "en": "Settings for remote '{remote}' updated successfully!"
+  },
+  "oauth.reconnectSpawnFailed": {
+    "zh-CN": "运行重新连接失败: {detail}",
+    "zh-TW": "執行重新連線失敗: {detail}",
+    "en": "Failed to run reconnect: {detail}"
+  },
+  "oauth.waitFailed": {
+    "zh-CN": "等待重新授权失败: {detail}",
+    "zh-TW": "等待重新授權失敗: {detail}",
+    "en": "Failed while waiting for re-authorization: {detail}"
+  },
+  "oauth.reauthSuccess": {
+    "zh-CN": "远程 '{remote}' 重新授权登录成功！",
+    "zh-TW": "遠端 '{remote}' 重新授權登入成功！",
+    "en": "Remote '{remote}' re-authorized successfully!"
+  },
+  "oauth.reauthFailed": {
+    "zh-CN": "重新授权失败: {detail}",
+    "zh-TW": "重新授權失敗: {detail}",
+    "en": "Re-authorization failed: {detail}"
+  },
+  "oauth.reauthRunFailed": {
+    "zh-CN": "运行重新授权失败: {detail}",
+    "zh-TW": "執行重新授權失敗: {detail}",
+    "en": "Failed to run re-authorization: {detail}"
+  },
+  "remote.detailReadFailed": {
+    "zh-CN": "读取设置失败: {detail}",
+    "zh-TW": "讀取設定失敗: {detail}",
+    "en": "Failed to read settings: {detail}"
+  },
+  "remote.detailParseJsonFailed": {
+    "zh-CN": "解析设置 JSON 失败: {detail}",
+    "zh-TW": "解析設定 JSON 失敗: {detail}",
+    "en": "Failed to parse settings JSON: {detail}"
+  },
+  "remote.deleteSpawnFailed": {
+    "zh-CN": "删除远程失败: {detail}",
+    "zh-TW": "刪除遠端失敗: {detail}",
+    "en": "Failed to delete remote: {detail}"
+  },
+  "remote.deleteFailed": {
+    "zh-CN": "删除失败: {detail}",
+    "zh-TW": "刪除失敗: {detail}",
+    "en": "Delete failed: {detail}"
+  },
+  "webgui.startFailed": {
+    "zh-CN": "启动 Web-GUI 失败: {detail}",
+    "zh-TW": "啟動 Web-GUI 失敗: {detail}",
+    "en": "Failed to start Web-GUI: {detail}"
+  },
+  "browser.openFailed": {
+    "zh-CN": "无法打开默认浏览器: {detail}",
+    "zh-TW": "無法開啟預設瀏覽器: {detail}",
+    "en": "Could not open the default browser: {detail}"
+  },
+  "window.configWizard": {
+    "zh-CN": "Rclone Config 交互设置向导",
+    "zh-TW": "Rclone Config 互動設定精靈",
+    "en": "Rclone Config Interactive Setup Wizard"
+  },
+  "wizard.openFailed": {
+    "zh-CN": "无法启动原版设置向导窗口: {detail}",
+    "zh-TW": "無法啟動原版設定精靈視窗: {detail}",
+    "en": "Failed to launch the built-in setup wizard window: {detail}"
+  },
+  "providers.spawnFailed": {
+    "zh-CN": "运行 rclone config providers 失败: {detail}",
+    "zh-TW": "執行 rclone config providers 失敗: {detail}",
+    "en": "Failed to run rclone config providers: {detail}"
+  },
+  "providers.parseJsonFailed": {
+    "zh-CN": "解析 providers JSON 失败: {detail}",
+    "zh-TW": "解析 providers JSON 失敗: {detail}",
+    "en": "Failed to parse providers JSON: {detail}"
+  },
+  "providers.readFailed": {
+    "zh-CN": "读取 providers 失败: {detail}",
+    "zh-TW": "讀取 providers 失敗: {detail}",
+    "en": "Failed to read providers: {detail}"
+  },
+  "dialog.selectFolder": {
+    "zh-CN": "请选择文件夹",
+    "zh-TW": "請選擇資料夾",
+    "en": "Select a folder"
+  },
+  "dialog.openFailed": {
+    "zh-CN": "打开文件夹浏览窗口失败: {detail}",
+    "zh-TW": "開啟資料夾瀏覽視窗失敗: {detail}",
+    "en": "Failed to open the folder browser dialog: {detail}"
+  },
+  "dirs.readFailed": {
+    "zh-CN": "读取云端目录失败: {detail}",
+    "zh-TW": "讀取雲端目錄失敗: {detail}",
+    "en": "Failed to read the cloud directory: {detail}"
+  },
+  "dirs.listFailed": {
+    "zh-CN": "列出目录失败: {detail}",
+    "zh-TW": "列出目錄失敗: {detail}",
+    "en": "Failed to list directories: {detail}"
+  },
+  "diff.runFailed": {
+    "zh-CN": "运行比对失败: {detail}",
+    "zh-TW": "執行比對失敗: {detail}",
+    "en": "Failed to run compare: {detail}"
+  },
+  "diff.identical": {
+    "zh-CN": "两端文件完全一致，无任何差异！",
+    "zh-TW": "兩端檔案完全一致，無任何差異！",
+    "en": "Both sides are completely identical - no differences found!"
+  },
+  "diff.summary": {
+    "zh-CN": "比对完成：来源待同步 {sourceOnly} 个，目标端多出 {destOnly} 个，内容差异 {different} 个，一致 {equal} 个",
+    "zh-TW": "比對完成：來源待同步 {sourceOnly} 個，目標端多出 {destOnly} 個，內容差異 {different} 個，一致 {equal} 個",
+    "en": "Compare finished: {sourceOnly} to sync from source, {destOnly} extra on destination, {different} different, {equal} identical"
+  },
+  "copy.noFilesSelected": {
+    "zh-CN": "请先勾选要拷贝的文件！",
+    "zh-TW": "請先勾選要拷貝的檔案！",
+    "en": "Please select the files to copy first!"
+  },
+  "copy.runFailed": {
+    "zh-CN": "运行拷贝失败: {detail}",
+    "zh-TW": "執行拷貝失敗: {detail}",
+    "en": "Failed to run copy: {detail}"
+  },
+  "copy.success": {
+    "zh-CN": "文件已成功拷贝完成！",
+    "zh-TW": "檔案已成功拷貝完成！",
+    "en": "Files copied successfully!"
+  },
+  "copy.failed": {
+    "zh-CN": "拷贝失败: {detail}",
+    "zh-TW": "拷貝失敗: {detail}",
+    "en": "Copy failed: {detail}"
+  },
+  "sync.runFailed": {
+    "zh-CN": "运行同步/备份任务失败: {detail}",
+    "zh-TW": "執行同步/備份任務失敗: {detail}",
+    "en": "Failed to run sync/backup task: {detail}"
+  },
+  "sync.success": {
+    "zh-CN": "任务运行成功完成！",
+    "zh-TW": "任務執行成功完成！",
+    "en": "Task completed successfully!"
+  },
+  "sync.failed": {
+    "zh-CN": "任务失败: {detail}",
+    "zh-TW": "任務失敗: {detail}",
+    "en": "Task failed: {detail}"
+  }
+}

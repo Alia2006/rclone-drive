@@ -16,6 +16,7 @@ use tauri::{
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+mod i18n;
 mod mount_options;
 pub use mount_options::MountPerformanceOptions;
 
@@ -47,15 +48,24 @@ pub struct MountInstance {
     pub rc_port: Option<u16>,
 }
 
+fn default_language() -> String {
+    // Empty means "no explicit choice yet": the frontend then follows the
+    // system locale and persists the resolved language on first launch.
+    String::new()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub start_minimized_to_tray: bool,
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             start_minimized_to_tray: true,
+            language: default_language(),
         }
     }
 }
@@ -254,8 +264,38 @@ fn get_app_settings() -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-fn save_app_settings(settings: AppSettings) -> Result<(), String> {
-    save_app_settings_to_file(&settings)
+fn save_app_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
+    save_app_settings_to_file(&settings)?;
+    i18n::set_current(&settings.language);
+    apply_language(&app);
+    Ok(())
+}
+
+/// Rebuild the tray menu, tooltip, and window title with the current language.
+fn apply_language(app: &tauri::AppHandle) {
+    let lang = i18n::current();
+
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let show = MenuItemBuilder::with_id("show", i18n::text(&lang, "tray.showDashboard")).build(app);
+        let webgui = MenuItemBuilder::with_id("webgui", i18n::text(&lang, "tray.openWebGui")).build(app);
+        let quit = MenuItemBuilder::with_id("quit", i18n::text(&lang, "tray.quit")).build(app);
+
+        if let (Ok(show_i), Ok(webgui_i), Ok(quit_i)) = (show, webgui, quit) {
+            if let Ok(menu) = MenuBuilder::new(app)
+                .items(&[&show_i, &webgui_i, &quit_i])
+                .build()
+            {
+                let _ = tray.set_menu(Some(menu));
+            }
+        }
+
+        let tooltip = i18n::text(&lang, "app.trayTooltip");
+        let _ = tray.set_tooltip(Some(&tooltip));
+    }
+
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.set_title(&i18n::text(&lang, "app.windowTitle"));
+    }
 }
 
 #[tauri::command]
@@ -335,7 +375,7 @@ async fn auto_install_rclone() -> Result<String, String> {
 
             $foundExe = Get-ChildItem -Path $tempExtract -Recurse -Filter "rclone.exe" | Select-Object -First 1
             if (-not $foundExe) {
-                throw "无法在下载的压缩包中找到 rclone.exe"
+                throw "rclone.exe not found in the downloaded archive"
             }
 
             $targetDir = "C:\rclone"
@@ -367,20 +407,21 @@ async fn auto_install_rclone() -> Result<String, String> {
         let mut cmd = Command::new("powershell.exe");
         cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let output = cmd.output().map_err(|e| format!("运行下载安装失败: {}", e))?;
+        let output = cmd.output().map_err(|e| i18n::trf("install.rcloneRunFailed", &[("detail", &e.to_string())]))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
             let out = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("安装 Rclone 失败: {} {}", err.trim(), out.trim()));
+            let detail = format!("{} {}", err.trim(), out.trim());
+            return Err(i18n::trf("install.rcloneFailed", &[("detail", &detail)]));
         }
         let installed_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if installed_path.is_empty() {
-            return Err("下载完成但未获取安装路径".to_string());
+            return Err(i18n::tr("install.rcloneNoPath"));
         }
         Ok(installed_path)
     })
     .await
-    .map_err(|e| format!("线程错误: {}", e))?
+    .map_err(|e| i18n::trf("common.threadError", &[("detail", &e.to_string())]))?
 }
 
 #[tauri::command]
@@ -403,15 +444,16 @@ async fn auto_install_winfsp() -> Result<String, String> {
         let mut cmd = Command::new("powershell.exe");
         cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let output = cmd.output().map_err(|e| format!("启动 WinFsp 安装程序失败: {}", e))?;
+        let output = cmd.output().map_err(|e| i18n::trf("install.winfspStartFailed", &[("detail", &e.to_string())]))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("下载或安装 WinFsp 失败: {}", err.trim()));
+            let detail = err.trim().to_string();
+            return Err(i18n::trf("install.winfspFailed", &[("detail", &detail)]));
         }
-        Ok("WinFsp 安装程序已运行完毕".to_string())
+        Ok(i18n::tr("install.winfspFinished"))
     })
     .await
-    .map_err(|e| format!("线程错误: {}", e))?
+    .map_err(|e| i18n::trf("common.threadError", &[("detail", &e.to_string())]))?
 }
 
 #[tauri::command]
@@ -437,9 +479,9 @@ async fn download_and_install_update(
             $tempFile = Join-Path $env:TEMP $fileName
             Invoke-WebRequest -Uri $url -OutFile $tempFile -UseBasicParsing
             if (-not (Test-Path $tempFile)) {{
-                throw "下载完成但无法在临时目录找到文件"
+                throw "Downloaded file not found in temp directory"
             }}
-            # 等待 1 秒让旧版主程序准备退出，接着启动安装程序
+            # Wait 1s so the old app can exit, then start the installer
             Start-Sleep -Seconds 1
             if ($tempFile.EndsWith(".msi")) {{
                 Start-Process msiexec.exe -ArgumentList "/i `"$tempFile`""
@@ -454,16 +496,17 @@ async fn download_and_install_update(
         let mut cmd = Command::new("powershell.exe");
         cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &script]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let output = cmd.output().map_err(|e| format!("运行更新程序失败: {}", e))?;
+        let output = cmd.output().map_err(|e| i18n::trf("update.runFailed", &[("detail", &e.to_string())]))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
             let out = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("下载或启动更新失败: {} {}", err.trim(), out.trim()));
+            let detail = format!("{} {}", err.trim(), out.trim());
+            return Err(i18n::trf("update.startFailed", &[("detail", &detail)]));
         }
-        Ok("更新安装程序已成功启动".to_string())
+        Ok(i18n::tr("update.installerStarted"))
     })
     .await
-    .map_err(|e| format!("线程错误: {}", e))?;
+    .map_err(|e| i18n::trf("common.threadError", &[("detail", &e.to_string())]))?;
 
     // 3. 启动安装程序后，延迟 600ms 自动退出目前运行中的旧版应用程序，避免文件被占用
     if res.is_ok() {
@@ -552,14 +595,14 @@ fn get_remotes(
     cmd.args(["config", "dump"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("无法运行 rclone config dump: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("config.dumpRunFailed", &[("detail", &e.to_string())]))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("读取 rclone 设置失败: {}", err));
+        return Err(i18n::trf("config.readFailed", &[("detail", &err)]));
     }
 
     let json_val: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("解析 rclone 设置 JSON 失败: {}", e))?;
+        .map_err(|e| i18n::trf("config.parseJsonFailed", &[("detail", &e.to_string())]))?;
 
     let mounts = state.mounts.lock().unwrap();
     let mut remotes = Vec::new();
@@ -726,14 +769,14 @@ fn mount_remote(
     {
         let mounts = state.mounts.lock().unwrap();
         if mounts.contains_key(&remote) {
-            return Err(format!("远程 '{}' 已经挂载中！", remote));
+            return Err(i18n::trf("mount.alreadyMounted", &[("remote", &remote)]));
         }
     }
 
     let clean_letter = drive_letter.trim().trim_end_matches(':').trim_end_matches('\\').to_uppercase();
     let root_path = format!("{clean_letter}:\\");
     if Path::new(&root_path).exists() {
-        return Err(format!("盘符 {clean_letter}: 已被本机其他设备占用！"));
+        return Err(i18n::trf("mount.driveLetterInUse", &[("drive", &clean_letter)]));
     }
 
     let v_name = volname.unwrap_or_else(|| remote.clone());
@@ -782,7 +825,7 @@ fn mount_remote(
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.stderr(Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|e| format!("启动 rclone 挂载进程失败: {}", e))?;
+    let mut child = cmd.spawn().map_err(|e| i18n::trf("mount.spawnFailed", &[("detail", &e.to_string())]))?;
     let pid = child.id();
 
     let mut mounted = false;
@@ -794,11 +837,11 @@ fn mount_remote(
                 let _ = stderr.read_to_string(&mut err_msg);
             }
             let detail = if err_msg.trim().is_empty() {
-                format!("状态码: {:?}", status.code())
+                i18n::trf("mount.exitCode", &[("detail", &format!("{:?}", status.code()))])
             } else {
                 err_msg.trim().to_string()
             };
-            return Err(format!("挂载失败: rclone 进程已退出 ({detail})。请确认盘符是否冲突或设置是否有效。"));
+            return Err(i18n::trf("mount.failed", &[("detail", &detail)]));
         }
         if Path::new(&root_path).exists() {
             mounted = true;
@@ -816,7 +859,7 @@ fn mount_remote(
         kill_cmd.args(["/F", "/PID", &pid.to_string(), "/T"]);
         kill_cmd.creation_flags(CREATE_NO_WINDOW);
         let _ = kill_cmd.output();
-        return Err(format!("挂载超时，磁盘 {clean_letter}: 未能及时就绪。请确认 WinFsp 正常运行。"));
+        return Err(i18n::trf("mount.timeout", &[("drive", &clean_letter)]));
     }
 
     // Non-blocking Warm-up in background if enabled
@@ -873,7 +916,7 @@ fn unmount_remote(state: State<'_, AppState>, remote: String) -> Result<bool, St
 
         Ok(true)
     } else {
-        Err(format!("找不到已挂载的远程 '{}'", remote))
+        Err(i18n::trf("mount.notFound", &[("remote", &remote)]))
     }
 }
 
@@ -881,7 +924,7 @@ fn unmount_remote(state: State<'_, AppState>, remote: String) -> Result<bool, St
 fn open_in_explorer(drive_letter: String) -> Result<(), String> {
     let mut cmd = Command::new("explorer.exe");
     cmd.arg(format!("{}\\", drive_letter.trim()));
-    cmd.spawn().map_err(|e| format!("打开资源管理器失败: {}", e))?;
+    cmd.spawn().map_err(|e| i18n::trf("explorer.openFailed", &[("detail", &e.to_string())]))?;
     Ok(())
 }
 
@@ -903,7 +946,7 @@ fn vfs_refresh_cache(
     let rc_port = match rc_port {
         Some(port) => port,
         None => {
-            return Err("此磁盘挂载时未启用 RC 远程控制端口。请先将此磁盘「卸载」后重新「挂载」，即可使用刷新缓存！".to_string());
+            return Err(i18n::tr("vfs.noRcPort"));
         }
     };
 
@@ -921,18 +964,19 @@ fn vfs_refresh_cache(
     ]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("运行 vfs/refresh 失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("vfs.runFailed", &[("detail", &e.to_string())]))?;
 
     if output.status.success() {
-        Ok(format!("已成功发送缓存刷新请求（异步后台更新中）"))
+        Ok(i18n::tr("vfs.refreshSent"))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let combined = format!("{} {}", stderr, stdout).to_lowercase();
         if combined.contains("refused") || combined.contains("connection failed") || combined.contains("eof") {
-            Err("无法连接至 Rclone 远程控制端口（请先「卸载」后重新「挂载」此磁盘以启用 RC 服务）".to_string())
+            Err(i18n::tr("vfs.connectionFailed"))
         } else {
-            Err(format!("刷新缓存失败: {} {}", stderr, stdout).trim().to_string())
+            let detail = format!("{} {}", stderr, stdout).trim().to_string();
+            Err(i18n::trf("vfs.refreshFailed", &[("detail", &detail)]))
         }
     }
 }
@@ -1003,7 +1047,7 @@ async fn create_remote_gui(
 
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let mut child = cmd.spawn().map_err(|e| format!("运行 rclone config create 失败: {}", e))?;
+        let mut child = cmd.spawn().map_err(|e| i18n::trf("remote.createSpawnFailed", &[("detail", &e.to_string())]))?;
 
         if is_onedrive {
             if let Some(mut stdin) = child.stdin.take() {
@@ -1011,12 +1055,12 @@ async fn create_remote_gui(
             }
         }
 
-        let output = child.wait_with_output().map_err(|e| format!("等待创建失败: {}", e))?;
+        let output = child.wait_with_output().map_err(|e| i18n::trf("remote.createWaitFailed", &[("detail", &e.to_string())]))?;
         if output.status.success() {
             if is_onedrive {
                 let _ = auto_heal_onedrive_config(&exe, &name);
             }
-            Ok(format!("成功创建远程 '{}'！", name))
+            Ok(i18n::trf("remote.createSuccess", &[("remote", &name)]))
         } else {
             let err = String::from_utf8_lossy(&output.stderr).to_string();
             // 创建失败时清理半成品配置（原本已存在的远程不动）
@@ -1027,14 +1071,14 @@ async fn create_remote_gui(
                 let _ = del_cmd.output();
             }
             if err.contains("couldn't find backend for type") {
-                Err(format!("当前 rclone 版本不支持该网盘类型 '{}'。请升级 rclone 到最新版（https://rclone.org/downloads/），或改用「原版终端向导」配置。", remote_type))
+                Err(i18n::trf("remote.typeNotSupported", &[("remoteType", &remote_type)]))
             } else {
-                Err(format!("创建失败: {}", err))
+                Err(i18n::trf("remote.createFailed", &[("detail", &err)]))
             }
         }
     })
     .await
-    .map_err(|e| format!("运行创建失败: {}", e))?
+    .map_err(|e| i18n::trf("remote.createRunFailed", &[("detail", &e.to_string())]))?
 }
 
 // GUI Remote Config Update & Optional Rename
@@ -1067,11 +1111,11 @@ fn update_remote_gui(
             || target_name.contains('>')
             || target_name.contains('|')
         {
-            return Err("云端硬盘名称不可包含特殊字符 (: / \\ [ ] * ? < > | \")".to_string());
+            return Err(i18n::tr("remote.nameInvalidChars"));
         }
 
-        let conf_path = get_rclone_conf_path(&exe).ok_or_else(|| "找不到 rclone.conf 配置文件路径！".to_string())?;
-        let content = std::fs::read_to_string(&conf_path).map_err(|e| format!("无法读取 rclone.conf: {}", e))?;
+        let conf_path = get_rclone_conf_path(&exe).ok_or_else(|| i18n::tr("remote.confNotFound"))?;
+        let content = std::fs::read_to_string(&conf_path).map_err(|e| i18n::trf("remote.confReadFailed", &[("detail", &e.to_string())]))?;
 
         let old_header = format!("[{}]", old_name);
         let new_header = format!("[{}]", target_name);
@@ -1080,7 +1124,7 @@ fn update_remote_gui(
         for line in content.lines() {
             let t = line.trim();
             if t.eq_ignore_ascii_case(&new_header) && !t.eq_ignore_ascii_case(&old_header) {
-                return Err(format!("云端硬盘名称 '{}' 已经存在，请更换其他名称！", target_name));
+                return Err(i18n::trf("remote.nameExists", &[("remote", &target_name)]));
             }
             if t.eq_ignore_ascii_case(&old_header) {
                 found_old = true;
@@ -1088,7 +1132,7 @@ fn update_remote_gui(
         }
 
         if !found_old {
-            return Err(format!("找不到原设置名称 '{}'", old_name));
+            return Err(i18n::trf("remote.originalNotFound", &[("remote", &old_name)]));
         }
 
         let mut new_lines = Vec::new();
@@ -1102,7 +1146,7 @@ fn update_remote_gui(
             }
         }
         let new_content = new_lines.join("\r\n") + "\r\n";
-        std::fs::write(&conf_path, new_content).map_err(|e| format!("写入 rclone.conf 失败: {}", e))?;
+        std::fs::write(&conf_path, new_content).map_err(|e| i18n::trf("remote.confWriteFailed", &[("detail", &e.to_string())]))?;
 
         // Update active mounts tracking if currently mounted
         {
@@ -1135,17 +1179,17 @@ fn update_remote_gui(
 
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let output = cmd.output().map_err(|e| format!("运行 rclone config update 失败: {}", e))?;
+        let output = cmd.output().map_err(|e| i18n::trf("remote.updateSpawnFailed", &[("detail", &e.to_string())]))?;
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("更新失败: {}", err));
+            return Err(i18n::trf("remote.updateFailed", &[("detail", &err)]));
         }
     }
 
     if target_name != old_name {
-        Ok(format!("成功将云端硬盘名称更名为 '{}' 并保存设置！", target_name))
+        Ok(i18n::trf("remote.renameSuccess", &[("remote", &target_name)]))
     } else {
-        Ok(format!("成功更新远程 '{}' 的设置！", active_name))
+        Ok(i18n::trf("remote.updateSuccess", &[("remote", &active_name)]))
     }
 }
 
@@ -1162,22 +1206,22 @@ async fn reconnect_remote_gui(
         cmd.stdin(Stdio::piped());
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let mut child = cmd.spawn().map_err(|e| format!("运行重新连接失败: {}", e))?;
+        let mut child = cmd.spawn().map_err(|e| i18n::trf("oauth.reconnectSpawnFailed", &[("detail", &e.to_string())]))?;
         if let Some(mut stdin) = child.stdin.take() {
             let _ = stdin.write_all(b"1\n0\ny\ny\n");
         }
 
-        let output = child.wait_with_output().map_err(|e| format!("等待重新授权失败: {}", e))?;
+        let output = child.wait_with_output().map_err(|e| i18n::trf("oauth.waitFailed", &[("detail", &e.to_string())]))?;
         if output.status.success() {
             let _ = auto_heal_onedrive_config(&exe, &name);
-            Ok(format!("远程 '{}' 重新授权登录成功！", name))
+            Ok(i18n::trf("oauth.reauthSuccess", &[("remote", &name)]))
         } else {
             let err = String::from_utf8_lossy(&output.stderr);
-            Err(format!("重新授权失败: {}", err))
+            Err(i18n::trf("oauth.reauthFailed", &[("detail", &err)]))
         }
     })
     .await
-    .map_err(|e| format!("运行重新授权失败: {}", e))?
+    .map_err(|e| i18n::trf("oauth.reauthRunFailed", &[("detail", &e.to_string())]))?
 }
 
 // Get Single Remote Configuration Detail
@@ -1191,9 +1235,9 @@ fn get_remote_detail(
     cmd.args(["config", "dump"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("读取设置失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("remote.detailReadFailed", &[("detail", &e.to_string())]))?;
     let json_val: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("解析设置 JSON 失败: {}", e))?;
+        .map_err(|e| i18n::trf("remote.detailParseJsonFailed", &[("detail", &e.to_string())]))?;
 
     let mut result = HashMap::new();
     if let Some(remote_obj) = json_val.get(&name).and_then(|v| v.as_object()) {
@@ -1222,12 +1266,12 @@ fn delete_remote_gui(
     cmd.args(["config", "delete", &name]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("删除远程失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("remote.deleteSpawnFailed", &[("detail", &e.to_string())]))?;
     if output.status.success() {
         Ok(true)
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("删除失败: {}", err))
+        Err(i18n::trf("remote.deleteFailed", &[("detail", &err)]))
     }
 }
 
@@ -1256,7 +1300,7 @@ fn toggle_rclone_webgui(
         ]);
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let child = cmd.spawn().map_err(|e| format!("启动 Web-GUI 失败: {}", e))?;
+        let child = cmd.spawn().map_err(|e| i18n::trf("webgui.startFailed", &[("detail", &e.to_string())]))?;
         *gui_guard = Some(child.id());
         Ok(true)
     } else {
@@ -1275,7 +1319,7 @@ fn open_browser_url(url: String) -> Result<(), String> {
     let mut cmd = Command::new("cmd.exe");
     cmd.args(["/c", "start", "", &url]);
     cmd.creation_flags(CREATE_NO_WINDOW);
-    let _ = cmd.spawn().map_err(|e| format!("无法打开默认浏览器: {}", e))?;
+    let _ = cmd.spawn().map_err(|e| i18n::trf("browser.openFailed", &[("detail", &e.to_string())]))?;
     Ok(())
 }
 
@@ -1283,8 +1327,9 @@ fn open_browser_url(url: String) -> Result<(), String> {
 fn open_rclone_config_terminal(rclone_path: Option<String>) -> Result<(), String> {
     let exe = resolve_rclone_path(rclone_path);
     let mut cmd = Command::new("cmd.exe");
-    cmd.args(["/c", "start", "Rclone Config 交互设置向导", "cmd.exe", "/k", &format!("\"{}\" config", exe)]);
-    let _ = cmd.spawn().map_err(|e| format!("无法启动原版设置向导窗口: {}", e))?;
+    let wizard_title = i18n::tr("window.configWizard");
+    cmd.args(["/c", "start", &wizard_title, "cmd.exe", "/k", &format!("\"{}\" config", exe)]);
+    let _ = cmd.spawn().map_err(|e| i18n::trf("wizard.openFailed", &[("detail", &e.to_string())]))?;
     Ok(())
 }
 
@@ -1295,36 +1340,41 @@ fn get_supported_providers(rclone_path: Option<String>) -> Result<Vec<serde_json
     cmd.args(["config", "providers"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("运行 rclone config providers 失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("providers.spawnFailed", &[("detail", &e.to_string())]))?;
     if output.status.success() {
         let list: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout)
-            .map_err(|e| format!("解析 providers JSON 失败: {}", e))?;
+            .map_err(|e| i18n::trf("providers.parseJsonFailed", &[("detail", &e.to_string())]))?;
         Ok(list)
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("读取 providers 失败: {}", err))
+        Err(i18n::trf("providers.readFailed", &[("detail", &err)]))
     }
 }
 
 // Native Local Folder Browser Dialog (Windows Forms STA)
 #[tauri::command]
 fn select_local_folder() -> Result<Option<String>, String> {
-    let script = r#"
+    // Inject the localized dialog description (escape double quotes for PowerShell)
+    let description = i18n::tr("dialog.selectFolder").replace('"', "`\"");
+    let script = format!(
+        r#"
         [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
         $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-        $dialog.Description = "请选择文件夹"
+        $dialog.Description = "{}"
         $dialog.ShowNewFolderButton = $true
-        if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             [Console]::Out.Write($dialog.SelectedPath)
-        }
-    "#;
+        }}
+    "#,
+        description
+    );
 
     let output = Command::new("powershell")
-        .args(["-STA", "-NoProfile", "-Command", script])
+        .args(["-STA", "-NoProfile", "-Command", &script])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map_err(|e| format!("打开文件夹浏览窗口失败: {}", e))?;
+        .map_err(|e| i18n::trf("dialog.openFailed", &[("detail", &e.to_string())]))?;
 
     let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if path_str.is_empty() {
@@ -1345,10 +1395,10 @@ fn list_remote_dirs(
     cmd.args(["lsf", &remote_path, "--dirs-only"]);
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("读取云端目录失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("dirs.readFailed", &[("detail", &e.to_string())]))?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("列出目录失败: {}", err));
+        return Err(i18n::trf("dirs.listFailed", &[("detail", &err)]));
     }
 
     let out_str = String::from_utf8_lossy(&output.stdout);
@@ -1446,7 +1496,7 @@ fn check_folder_diff(
 
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("运行比对失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("diff.runFailed", &[("detail", &e.to_string())]))?;
     let out_str = String::from_utf8_lossy(&output.stdout);
 
     let mut items = Vec::new();
@@ -1538,11 +1588,16 @@ fn check_folder_diff(
     }
 
     let message = if total_s == 0 && total_d == 0 && total_diff == 0 && total_err == 0 {
-        "两端文件完全一致，无任何差异！".to_string()
+        i18n::tr("diff.identical")
     } else {
-        format!(
-            "比对完成：来源待同步 {} 个，目标端多出 {} 个，内容差异 {} 个，一致 {} 个",
-            total_s, total_d, total_diff, total_eq
+        i18n::trf(
+            "diff.summary",
+            &[
+                ("sourceOnly", &total_s.to_string()),
+                ("destOnly", &total_d.to_string()),
+                ("different", &total_diff.to_string()),
+                ("equal", &total_eq.to_string()),
+            ],
         )
     };
 
@@ -1567,7 +1622,7 @@ fn copy_specific_files(
     files: Vec<String>,
 ) -> Result<String, String> {
     if files.is_empty() {
-        return Err("请先勾选要拷贝的文件！".to_string());
+        return Err(i18n::tr("copy.noFilesSelected"));
     }
 
     let exe = resolve_rclone_path(rclone_path);
@@ -1583,15 +1638,15 @@ fn copy_specific_files(
     cmd.arg("-v");
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("运行拷贝失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("copy.runFailed", &[("detail", &e.to_string())]))?;
     if output.status.success() {
         let err_log = String::from_utf8_lossy(&output.stderr);
         let out_log = String::from_utf8_lossy(&output.stdout);
         let combined = format!("{}\n{}", out_log.trim(), err_log.trim());
-        Ok(if combined.trim().is_empty() { "文件已成功拷贝完成！".to_string() } else { combined.trim().to_string() })
+        Ok(if combined.trim().is_empty() { i18n::tr("copy.success") } else { combined.trim().to_string() })
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("拷贝失败: {}", err))
+        Err(i18n::trf("copy.failed", &[("detail", &err)]))
     }
 }
 
@@ -1627,15 +1682,15 @@ fn run_sync_task(
     cmd.arg("-v");
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("运行同步/备份任务失败: {}", e))?;
+    let output = cmd.output().map_err(|e| i18n::trf("sync.runFailed", &[("detail", &e.to_string())]))?;
     if output.status.success() {
         let err_log = String::from_utf8_lossy(&output.stderr);
         let out_log = String::from_utf8_lossy(&output.stdout);
         let combined = format!("{}\n{}", out_log.trim(), err_log.trim());
-        Ok(if combined.trim().is_empty() { "任务运行成功完成！".to_string() } else { combined.trim().to_string() })
+        Ok(if combined.trim().is_empty() { i18n::tr("sync.success") } else { combined.trim().to_string() })
     } else {
         let err = String::from_utf8_lossy(&output.stderr);
-        Err(format!("任务失败: {}", err))
+        Err(i18n::trf("sync.failed", &[("detail", &err)]))
     }
 }
 
@@ -1652,23 +1707,25 @@ pub fn run() {
             let args: Vec<String> = std::env::args().collect();
             let is_minimized_arg = args.iter().any(|a| a == "--minimized" || a == "-m");
             let settings = load_app_settings();
+            i18n::set_current(&settings.language);
+            let lang = i18n::current();
 
             let should_minimize = is_minimized_arg && settings.start_minimized_to_tray;
 
             // Ensure drive icons directory exists
             let _ = ensure_drive_icons();
 
-            let quit_i = MenuItemBuilder::with_id("quit", "结束 (Quit)").build(app)?;
-            let show_i = MenuItemBuilder::with_id("show", "打开仪表盘 (Show Dashboard)").build(app)?;
-            let webgui_i = MenuItemBuilder::with_id("webgui", "打开 Rclone Web-GUI (浏览器)").build(app)?;
+            let quit_i = MenuItemBuilder::with_id("quit", i18n::text(&lang, "tray.quit")).build(app)?;
+            let show_i = MenuItemBuilder::with_id("show", i18n::text(&lang, "tray.showDashboard")).build(app)?;
+            let webgui_i = MenuItemBuilder::with_id("webgui", i18n::text(&lang, "tray.openWebGui")).build(app)?;
             let menu = MenuBuilder::new(app)
                 .items(&[&show_i, &webgui_i, &quit_i])
                 .build()?;
 
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .tooltip("Rclone Drive - 云端硬盘挂载与同步系统")
+                .tooltip(i18n::text(&lang, "app.trayTooltip"))
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "show" => {
@@ -1705,6 +1762,7 @@ pub fn run() {
                 .build(app)?;
 
             if let Some(win) = app.get_webview_window("main") {
+                let _ = win.set_title(&i18n::text(&lang, "app.windowTitle"));
                 let win_clone = win.clone();
                 win.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {

@@ -24,6 +24,10 @@
 
 ## 🌟 特色亮点
 
+- **🌐 多语言界面**：
+  - 内置简体中文、繁體中文、English 三种界面语言，首次启动自动跟随系统语言。
+  - 可在「偏好设置 → 界面语言」中随时切换并记忆；托盘菜单、窗口标题、错误提示与 NSIS 安装向导会同步切换。
+
 - **💽 虚拟硬盘挂载 (RaiDrive 体验)**：
   - 将 Google Drive、OneDrive、Dropbox、WebDAV、SFTP、S3、PikPak、坚果云、OpenList 聚合网盘等云端空间挂载为 Windows 本机盘符（如 `Z:`、`Y:`、`X:`）。
   - **各云端专属磁盘图标**：挂载后资源管理器自动应用各云端专属图标（如 Google Drive、Dropbox、OneDrive、WebDAV 等），告别空白的白纸图标。
