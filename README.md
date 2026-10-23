@@ -121,10 +121,10 @@
 
 ```powershell
 # 检验安装包哈希值
-Get-FileHash .\RcloneDrive_v1.6.5_x64_Setup.exe -Algorithm SHA256
+Get-FileHash .\RcloneDrive_v1.6.6_x64_Setup.exe -Algorithm SHA256
 
 # 检验便携版哈希值
-Get-FileHash .\RcloneDrive_v1.6.5_Portable_x64.exe -Algorithm SHA256
+Get-FileHash .\RcloneDrive_v1.6.6_Portable_x64.exe -Algorithm SHA256
 ```
 
 比对输出的 `Hash` 字符串是否与 GitHub Releases 页面上公布的一致，即可 100% 确保文件未受损坏或篡改！
