@@ -49,9 +49,9 @@
 
 | 文件名称 | SHA-256 哈希值 |
 | :--- | :--- |
-| RcloneDrive_v1.6.6_x64_Setup.exe | （构建后填写） |
-| RcloneDrive_v1.6.6_Portable_x64.exe | （构建后填写） |
-| RcloneDrive_v1.6.6_x64.msi | （构建后填写） |
+| RcloneDrive_v1.6.6_x64_Setup.exe | 876d03192705fdf055f0f2cdfa417b2811b960fc841457f37725c2e77992b94e |
+| RcloneDrive_v1.6.6_Portable_x64.exe | 47767f470ec88026197c3c44a7182643f827071dfefe65775e0deaa1b22f53a0 |
+| RcloneDrive_v1.6.6_x64.msi | 0fd0fe4a08ac4a1a1fb8c4534a55798ba3a67f478624d58b195fb811f4b24663 |
 
 ---
 
