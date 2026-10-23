@@ -652,12 +652,17 @@ async function checkForUpdates(manual = false) {
       let assetUrl = "";
       let assetName = "";
       if (Array.isArray(data.assets)) {
-        const exeAsset = data.assets.find(
-          (a) => a.name.toLowerCase().endsWith(".exe") || a.name.toLowerCase().endsWith(".msi")
-        );
-        if (exeAsset) {
-          assetUrl = exeAsset.browser_download_url;
-          assetName = exeAsset.name;
+        // 必须选择安装包（Setup 优先，其次 MSI），绝不能选免安装版：
+        // Portable exe 只会从 %TEMP% 直接运行，不会写入安装目录，重启后又回到旧版本
+        const assets = data.assets;
+        const lower = (a) => a.name.toLowerCase();
+        const setupAsset = assets.find((a) => lower(a).endsWith(".exe") && /setup|installer/.test(lower(a)));
+        const msiAsset = assets.find((a) => lower(a).endsWith(".msi"));
+        const plainExeAsset = assets.find((a) => lower(a).endsWith(".exe") && !lower(a).includes("portable"));
+        const chosen = setupAsset || plainExeAsset || msiAsset;
+        if (chosen) {
+          assetUrl = chosen.browser_download_url;
+          assetName = chosen.name;
         }
       }
       updateInfo.downloadUrl = assetUrl || updateInfo.htmlUrl;
@@ -679,7 +684,13 @@ async function checkForUpdates(manual = false) {
 }
 
 async function executeUpdate() {
-  if (!updateInfo.downloadUrl || (!updateInfo.downloadUrl.endsWith(".exe") && !updateInfo.downloadUrl.endsWith(".msi"))) {
+  // 兜底：免安装版(Portable)不能用于就地升级——它只在临时目录运行，不会替换已安装的旧版本
+  const isPortableAsset = /portable/i.test(updateInfo.downloadUrl || "");
+  if (
+    isPortableAsset ||
+    !updateInfo.downloadUrl ||
+    (!updateInfo.downloadUrl.endsWith(".exe") && !updateInfo.downloadUrl.endsWith(".msi"))
+  ) {
     await openUrl(updateInfo.htmlUrl);
     showUpdateModal.value = false;
     return;
